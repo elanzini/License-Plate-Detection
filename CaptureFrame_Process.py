@@ -1,7 +1,10 @@
 import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import Localization
+import Preprocess
 import Recognize
 
 """
@@ -22,21 +25,22 @@ Output: None
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
     while (cap.isOpened()):
+
         ret, frame = cap.read()
-        # Converts each frame to gray scale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Applies Canny Edge Detector
-        edges = cv2.Canny(gray, 100, 200)
-        cv2.imshow('frame', gray)
-        cv2.imshow('edges', edges)
+        height, width, numChannels = frame.shape
+        imgGrayscaleScene = np.zeros((height, width, 1), np.uint8)
+        imgThreshScene = np.zeros((height, width, 1), np.uint8)
+        imgContours = np.zeros((height, width, 3), np.uint8)
 
-        # Testing Canny Edge detector
-        #cv2.imwrite('fame.png', gray)
-        #cv2.imwrite('edges.png', edges)
+        imgGrayscaleScene, imgThreshScene = Preprocess.preprocess(frame)  # preprocess to get grayscale and threshold images
+
+        cv2.imshow("gray", imgGrayscaleScene)
+        cv2.imshow("threshold", imgThreshScene)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
+#end function
