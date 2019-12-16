@@ -21,8 +21,8 @@ Hints:
 THRESHOLDING_ROW = 30
 THRESHOLDING_COL = 100
 
-showGraphs = False
-showSteps = False
+showGraphs = True
+showSteps = True
 
 def plate_detection(imgOriginalScene):
 
@@ -41,7 +41,7 @@ def plate_detection(imgOriginalScene):
 	for row in imgYellowDilated:
 		for i, pixel in enumerate(row):
 			if pixel > 0:
-				if i < 480:
+				if i < imgYellowDilated.shape[0]:
 					mask_row[i] += 1
 
 	for j, row in enumerate(imgYellowDilated):

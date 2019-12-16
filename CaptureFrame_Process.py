@@ -23,12 +23,14 @@ Output: None
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
     while (cap.isOpened()):
-        ret, imgOriginalScene = cap.read()
-        #imgOriginalScene = cv2.imread("test_2.png")
+        #ret, imgOriginalScene = cap.read()
+        imgOriginalScene = cv2.imread("test_2.png")
         cv2.imshow("Frame", imgOriginalScene)
 
         imgPossiblePlate = Localization.plate_detection(imgOriginalScene)
-        cv2.imshow("Plate", imgPossiblePlate)
+        if imgPossiblePlate is not None:
+            cv2.imshow("Plate", imgPossiblePlate)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
