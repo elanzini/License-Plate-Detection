@@ -1,5 +1,6 @@
 import argparse
 import os
+import cv2
 import CaptureFrame_Process
 
 # define the required arguments: video path(file_path), sample frequency(second), saving path for final result table
