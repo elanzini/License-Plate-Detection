@@ -1,6 +1,8 @@
 import cv2
 import os
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 import Localization
 import Recognize
 
@@ -18,23 +20,15 @@ Inputs:(three)
 Output: None
 """
 
-
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
     while (cap.isOpened()):
-        ret, frame = cap.read()
-        # Converts each frame to gray scale
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        ret, imgOriginalScene = cap.read()
+        #imgOriginalScene = cv2.imread("test_2.png")
+        cv2.imshow("Frame", imgOriginalScene)
 
-        # Applies Canny Edge Detector
-        edges = cv2.Canny(gray, 100, 200)
-        cv2.imshow('frame', gray)
-        cv2.imshow('edges', edges)
-
-        # Testing Canny Edge detector
-        #cv2.imwrite('fame.png', gray)
-        #cv2.imwrite('edges.png', edges)
-
+        imgPossiblePlate = Localization.plate_detection(imgOriginalScene)
+        cv2.imshow("Plate", imgPossiblePlate)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
