@@ -23,9 +23,12 @@ Output: None
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
     while (cap.isOpened()):
-        #ret, imgOriginalScene = cap.read()
-        imgOriginalScene = cv2.imread("test_2.png")
+        ret, imgOriginalScene = cap.read()
+        #imgOriginalScene = cv2.imread("test_2.png")
         cv2.imshow("Frame", imgOriginalScene)
+
+        avg = np.average(imgOriginalScene)
+        print(avg)
 
         imgPossiblePlate = Localization.plate_detection(imgOriginalScene)
         if imgPossiblePlate is not None:

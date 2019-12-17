@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 """
 In this file, you need to define plate_detection function.
@@ -18,67 +17,60 @@ Hints:
 	2. You may need to define two ways for localizing plates(yellow or other colors)
 """
 
-THRESHOLDING_ROW = 30
-THRESHOLDING_COL = 100
-
 showGraphs = True
 showSteps = True
 
-def plate_detection(imgOriginalScene):
 
-	imgHSVScene = cv2.cvtColor(imgOriginalScene, cv2.COLOR_BGR2HSV)
-	imgYellowScene = cv2.inRange(imgHSVScene, (20, 100, 100), (30, 255, 255))
+def get_blank_percentage(imgYellowScene):
+	return 1 - np.count_nonzero(imgYellowScene) / (imgYellowScene.shape[0] * imgYellowScene.shape[1])
+
+
+def apply_morphing(imgYellowScene, percentage):
 	kernel = np.ones((5, 5), np.uint8)
-	imgYellowDilated = cv2.dilate(imgYellowScene, kernel, iterations=3)
-
-	if showSteps:
-		cv2.imshow("Yellow", imgYellowScene)
-		cv2.imshow("Dilated", imgYellowDilated)
-
-	mask_row = np.zeros(imgYellowDilated.shape[0])
-	mask_col = np.zeros(imgYellowDilated.shape[1])
-
-	for row in imgYellowDilated:
-		for i, pixel in enumerate(row):
-			if pixel > 0:
-				if i < imgYellowDilated.shape[0]:
-					mask_row[i] += 1
-
-	for j, row in enumerate(imgYellowDilated):
-		for pixel in row:
-			if pixel > 0:
-				if j < imgYellowDilated.shape[1]:
-					mask_col[j] += 1
-
-	start_row = 0
-	end_row = 0
-	start_col = 0
-	end_col = 0
-
-	for i, count_in_row in enumerate(mask_row):
-		if count_in_row > THRESHOLDING_ROW:
-			if start_row == 0:
-				start_row = i
-			end_row = i
-
-	for j, count_in_col in enumerate(mask_col):
-		if count_in_col > THRESHOLDING_COL:
-			if start_col == 0:
-				start_col = j
-			end_col = j
-
-	if showGraphs:
-		plt.plot(mask_row)
-		plt.title('row')
-		plt.show()
-
-		plt.plot(mask_col)
-		plt.title('col')
-		plt.show()
-
-	if start_col > 0 and start_row > 0:
-		imgCroppedPlate = imgOriginalScene[start_col:end_col, start_row:end_row]
-		return imgCroppedPlate
+	imgOpening = cv2.morphologyEx(imgYellowScene, cv2.MORPH_OPEN, kernel)
+	imgClosing = cv2.morphologyEx(imgOpening, cv2.MORPH_CLOSE, kernel)
+	
+	if  0.995 < percentage <= 0.99:
+		imgYellowDilated = cv2.dilate(imgYellowScene, kernel, iterations=3)
+		print('case 1')
+	if 0.99 < percentage <= 0.98:
+		imgYellowDilated = cv2.dilate(imgYellowScene, kernel, iterations=2)
+		print('case 2')
+	if 0.98 < percentage <= 0.97:
+		imgMedianBlur = cv2.medianBlur(imgYellowScene, 5)
+		imgYellowDilated = cv2.dilate(imgMedianBlur, kernel, iterations=3)
+		print('case 3')
+	if 0.97 < percentage <= 0.96:
+		imgMedianBlur = cv2.medianBlur(imgYellowScene, 5)
+		imgYellowDilated = cv2.dilate(imgMedianBlur, kernel, iterations=3)
+		print('case 4')
 	else:
-		print('nothing found')
-		return None
+		imgMedianBlur = cv2.medianBlur(imgYellowScene, 5)
+		imgYellowDilated = cv2.dilate(imgMedianBlur, kernel, iterations=3)
+		print('case 5')
+
+	return imgYellowDilated
+
+
+def get_license_plate(imgMorphing):
+	# Find x_max, x_min, y_max, y_min and crop out the image
+	return None
+
+
+def plate_detection(imgOriginalScene):
+	# Increase contrast
+
+	imgBlurred = cv2.GaussianBlur(imgOriginalScene, (5, 5), 0)
+	imgHSVScene = cv2.cvtColor(imgBlurred, cv2.COLOR_BGR2HSV)
+	imgYellowScene = cv2.inRange(imgHSVScene, (20, 100, 100), (110, 255, 255))
+
+	percentage = get_blank_percentage(imgYellowScene)
+
+	imgMorphing = apply_morphing(imgYellowScene, percentage)
+	
+	if showSteps:
+		cv2.imshow("After Morphing", imgMorphing)
+	
+	imgLicensePlate = get_license_plate(imgMorphing)
+
+	return imgLicensePlate
