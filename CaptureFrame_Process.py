@@ -2,7 +2,6 @@ import cv2
 import os
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import Localization
 import Recognize
 
@@ -26,9 +25,6 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
         ret, imgOriginalScene = cap.read()
         #imgOriginalScene = cv2.imread("test_2.png")
         cv2.imshow("Frame", imgOriginalScene)
-
-        avg = np.average(imgOriginalScene)
-        print(avg)
 
         imgPossiblePlate = Localization.plate_detection(imgOriginalScene)
         if imgPossiblePlate is not None:

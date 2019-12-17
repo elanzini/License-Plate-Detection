@@ -18,29 +18,31 @@ Hints:
 """
 
 showGraphs = True
-showSteps = True
-
+showSteps = False
 
 def get_blank_percentage(imgYellowScene):
 	return 1 - np.count_nonzero(imgYellowScene) / (imgYellowScene.shape[0] * imgYellowScene.shape[1])
 
-
 def apply_morphing(imgYellowScene, percentage):
 	kernel = np.ones((5, 5), np.uint8)
 	imgOpening = cv2.morphologyEx(imgYellowScene, cv2.MORPH_OPEN, kernel)
+	cv2.imshow("openinig", imgOpening)
 	imgClosing = cv2.morphologyEx(imgOpening, cv2.MORPH_CLOSE, kernel)
-	
-	if  0.995 < percentage <= 0.99:
+	cv2.imshow("closing", imgClosing)
+
+	print(percentage)
+
+	if  percentage >= 0.99:
 		imgYellowDilated = cv2.dilate(imgYellowScene, kernel, iterations=3)
 		print('case 1')
-	if 0.99 < percentage <= 0.98:
+	if 0.99 > percentage >= 0.98:
 		imgYellowDilated = cv2.dilate(imgYellowScene, kernel, iterations=2)
 		print('case 2')
-	if 0.98 < percentage <= 0.97:
+	if 0.98 > percentage >= 0.97:
 		imgMedianBlur = cv2.medianBlur(imgYellowScene, 5)
 		imgYellowDilated = cv2.dilate(imgMedianBlur, kernel, iterations=3)
 		print('case 3')
-	if 0.97 < percentage <= 0.96:
+	if 0.97 > percentage >= 0.96:
 		imgMedianBlur = cv2.medianBlur(imgYellowScene, 5)
 		imgYellowDilated = cv2.dilate(imgMedianBlur, kernel, iterations=3)
 		print('case 4')
@@ -58,19 +60,28 @@ def get_license_plate(imgMorphing):
 
 
 def plate_detection(imgOriginalScene):
+
 	# Increase contrast
+	alpha = 1.5
+	gamma = 1
+	imgHighContrast = cv2.addWeighted(imgOriginalScene, alpha, imgOriginalScene, 0, gamma)
+	if showSteps:
+		cv2.imshow("Contrast", imgHighContrast)
 
-	imgBlurred = cv2.GaussianBlur(imgOriginalScene, (5, 5), 0)
-	imgHSVScene = cv2.cvtColor(imgBlurred, cv2.COLOR_BGR2HSV)
-	imgYellowScene = cv2.inRange(imgHSVScene, (20, 100, 100), (110, 255, 255))
+	# Conversion to HSV and Yellow Threshold
+	imgHSVScene = cv2.cvtColor(imgHighContrast, cv2.COLOR_BGR2HSV)
+	imgYellowScene = cv2.inRange(imgHSVScene, (20, 100, 100), (90, 255, 255))
+	#if showSteps:
+	cv2.imshow("Yellow", imgYellowScene)
 
+	# Apply different morphological techniques based on the percentage of blank
 	percentage = get_blank_percentage(imgYellowScene)
-
+	print(percentage)
 	imgMorphing = apply_morphing(imgYellowScene, percentage)
-	
 	if showSteps:
 		cv2.imshow("After Morphing", imgMorphing)
-	
+
+	# Set of Heuristics to extrapolate the license plate
 	imgLicensePlate = get_license_plate(imgMorphing)
 
 	return imgLicensePlate
