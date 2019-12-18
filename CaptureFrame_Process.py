@@ -3,6 +3,8 @@ import os
 import pandas as pd
 import Localization
 import Recognize
+import SceneDetection
+import numpy as np
 
 """
 In this file, you will define your own CaptureFrame_Process funtion. In this function,
@@ -21,6 +23,15 @@ Output: None
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
+
+    nOfFramesApprox = int(cv2.VideoCapture.get(cap, int(cv2.CAP_PROP_FRAME_COUNT)))
+    width = int(cap.get(3))
+    height = int(cap.get(4))
+
+    ret, frame = cap.read()
+
+    sceneDetector = SceneDetection.SceneDetector(width, height, nOfFramesApprox)
+
     while (cap.isOpened()):
         ret, frame = cap.read()
         # Converts each frame to gray scale
@@ -35,8 +46,12 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
         #cv2.imwrite('fame.png', gray)
         #cv2.imwrite('edges.png', edges)
 
+        sceneDetector.captureFrame(gray)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+    sceneDetector.getSceneChanges(35)
 
     cap.release()
     cv2.destroyAllWindows()
