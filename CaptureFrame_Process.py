@@ -23,8 +23,8 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap = cv2.VideoCapture(file_path)
     while (cap.isOpened()):
         ret, imgOriginalScene = cap.read()
-        #imgOriginalScene = cv2.imread("test_2.png")
-        cv2.imshow("Frame", imgOriginalScene)
+        # imgLicensePlate = cv2.imread("lpd_test_01.png")
+        # cv2.imshow("LP", imgLicensePlate)
 
         imgPossiblePlate = Localization.plate_detection(imgOriginalScene)
         if imgPossiblePlate is not None:
@@ -35,3 +35,23 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+def get_cells(img_plate):
+    (h, w) = img_plate.shape[:2]
+    image_size = h * w
+    mser = cv2.MSER_create()
+    mser.setMaxArea(image_size // 2)
+    mser.setMinArea(10)
+
+    gray = cv2.cvtColor(img_plate, cv2.COLOR_BGR2GRAY)  # Converting to GrayScale
+    _, bw = cv2.threshold(gray, 0.0, 255.0, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+    regions, rects = mser.detectRegions(bw)
+
+    # With the rects you can e.g. crop the letters
+    for (x, y, w, h) in rects:
+        if w * h > 600:
+            cv2.rectangle(img_plate, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=1)
+
+    return img_plate
