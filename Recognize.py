@@ -5,6 +5,8 @@ import os
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
 dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9"}
 
+THRESHOLD_MSER = 1000
+
 """
 In this file, you will define your own segment_and_recognize function.
 To do:
@@ -30,9 +32,26 @@ def segment_and_recognize(plate_imgs):
 """
 	Given the image of a plate, break down the plate into cells each containing a potential character
 """
-def get_cells_from_plate(plate_img):
+
+def get_cells_from_plate(img_plate):
 	cells = []
-	# The goal is to segment the plate image and crop out each of the pictures of the characters
+
+	(h, w) = img_plate.shape[:2]
+	image_size = h * w
+	mser = cv2.MSER_create()
+	mser.setMaxArea(image_size // 2)
+	mser.setMinArea(10)
+
+	gray = cv2.cvtColor(img_plate, cv2.COLOR_BGR2GRAY)  # Converting to GrayScale
+	_, bw = cv2.threshold(gray, 0.0, 255.0, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+
+	regions, rects = mser.detectRegions(bw)
+
+	# With the rects you can e.g. crop the letters
+	for (x, y, w, h) in rects:
+		if w * h > THRESHOLD_MSER:
+			cells.append(img_plate[y:y + h, x:x + w])
+			cv2.rectangle(img_plate, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=1)
 
 	return cells
 

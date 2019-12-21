@@ -31,10 +31,6 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
         cv2.imshow('frame', gray)
         cv2.imshow('edges', edges)
 
-        # Testing Canny Edge detector
-        #cv2.imwrite('fame.png', gray)
-        #cv2.imwrite('edges.png', edges)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
