@@ -63,10 +63,15 @@ def get_matching(param, n, cell_img):
 	for i in range(n):
 		file_path = param + str(i + 1) + ".bmp"
 		template = cv2.imread(file_path)
+		# templateGray seems to give problems
+		print("Reading image")
+		print(file_path)
+		print(template)
 		templateGray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 		w, h = templateGray.shape[::-1]
-		res = cv2.matchTemplate(cell_img, templateGray, cv2.TM_CCOEFF_NORMED)
-		results.append(max(res))
+		res = cv2.matchTemplate(cell_img, template, cv2.TM_CCOEFF_NORMED)
+		min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+		results.append(max_val)
 	return results
 
 """
@@ -74,11 +79,26 @@ def get_matching(param, n, cell_img):
 	Uses dictionaries to get the result from the index of the max of the function.
 """
 def template_matching(cell_img):
-	results_numbers = get_matching("/SameSizeNumbers/", 9, cell_img)
-	results_letters = get_matching("/SameSizeLetters/", 17, cell_img)
+	results_numbers = get_matching("SameSizeNumbers/", 9, cell_img)
+	results_letters = get_matching("SameSizeLetters/", 17, cell_img)
 	max_numbers = max(results_numbers)
 	max_letters = max(results_letters)
 	if max_letters > max_numbers:
 		return dictLetters[results_letters.index(max_letters)]
 	else:
 		return dictNumbers[results_numbers.index(max_numbers)]
+
+
+def preprocess_cell(img):
+    # Noise reduction
+    imgBlurred = cv2.medianBlur(img, 3)
+    # Normalization
+    imgNormalized = np.zeros((img.shape[0], img.shape[1]))
+    imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
+    # Digitization
+    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_BINARY)
+    # Resize - 85 * 100 is the size of the template images
+    imgResized = cv2.resize(imgThresholding,(100,85))
+    # Invert colors
+    imgInverse = cv2.bitwise_not(imgResized)
+    return imgInverse
