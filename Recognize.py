@@ -102,3 +102,18 @@ def preprocess_cell(img):
     # Invert colors
     imgInverse = cv2.bitwise_not(imgResized)
     return imgInverse
+
+
+def get_match(img, template):
+	min_val = 10000000000
+	for i in range(img.shape[1]):
+		start_col = i
+		SAD = 0.0
+		while start_col < img.shape[1]:
+			for row in range(img.shape[0]):
+				SAD = SAD + abs(img[row][start_col] - template[row][start_col - i])
+			start_col = start_col + 1
+		if SAD < min_val:
+			min_val = SAD
+
+	return min_val
