@@ -4,7 +4,6 @@ import os
 
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
 dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9"}
-ratios = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9"}
 
 THRESHOLD_MSER = 1000
 
@@ -99,10 +98,11 @@ def template_matching(cell_img):
     else:
         return dictNumbers[results_numbers.index(max_numbers)]
 
-
 def preprocess_cell(img):
+    # Grayscale
+    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # Noise reduction
-    imgBlurred = cv2.medianBlur(img, 3)
+    imgBlurred = cv2.medianBlur(imgGray, 3)
     # Normalization
     imgNormalized = np.zeros((img.shape[0], img.shape[1]))
     imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
@@ -110,22 +110,24 @@ def preprocess_cell(img):
     ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_BINARY)
     # Invert colors
     imgInverse = cv2.bitwise_not(imgThresholding)
-    # Ratio = width / height
-    first_nonzero_col, last_nonzero_col = first_last_nonzero(imgInverse)
+    # Crop out image
+    first_nonzero_col, last_nonzero_col = first_last_nonzero(imgInverse, axis=0)
     first_nonzero_row, last_nonzero_row = first_last_nonzero(imgInverse, axis=1)
+    imgCropped = imgInverse[first_nonzero_row: last_nonzero_row, first_nonzero_col:last_nonzero_col]
+    # Ratio = width / height
     ratio = (last_nonzero_row - first_nonzero_row) /  (last_nonzero_col - first_nonzero_col)
     if ratio > 3.00:
         # Resize - 80 * 20 is the size of the template images with a one
-        imgResized = cv2.resize(imgThresholding,(85,20))
+        imgResized = cv2.resize(imgCropped,(20,85))
     elif 2.00 < ratio < 3.00:
         # Resize - 80 * 40 is the size of the template images with a J
-        imgResized = cv2.resize(imgThresholding,(85,40))
+        imgResized = cv2.resize(imgCropped,(40,85))
     elif 1.00 < ratio < 1.3:
         # Resize - 80 * 20 is the size of the template images with an M
-        imgResized = cv2.resize(imgThresholding,(85,70))
+        imgResized = cv2.resize(imgCropped,(70,85))
     else:
         # Resize - 85 * 55 is the size of the template images that are not a one or a default size letter
-        imgResized = cv2.resize(imgThresholding,(85,55))
+        imgResized = cv2.resize(imgCropped,(55,85))
     return imgResized
 
 
@@ -142,7 +144,6 @@ def get_difference(img, template):
 def first_last_nonzero(arr, axis=0, invalid_val=-1):
     mask = arr!=0
     pos = np.where(mask.any(axis=axis), mask.argmax(axis=axis), invalid_val)
-    print(pos)
     '''
     pos will look something like this, where each number represents an index
      array([ 0,  0,  1, -1])
