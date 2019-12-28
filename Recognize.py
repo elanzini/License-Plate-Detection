@@ -3,9 +3,10 @@ import numpy as np
 import os
 
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
-dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "5", 7: "6", 8: "7", 9: "8", 10: "9"}
+dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "5"}
 
 THRESHOLD_MSER = 1000
+MAX_VAL = 100000000000
 
 """
 In this file, you will define your own segment_and_recognize function.
@@ -37,7 +38,6 @@ def segment_and_recognize(plate_imgs):
 """
     Given the image of a plate, break down the plate into cells each containing a potential character
 """
-
 def get_cells_from_plate(img_plate):
     cells = []
 
@@ -59,6 +59,7 @@ def get_cells_from_plate(img_plate):
             cv2.rectangle(img_plate, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=1)
 
     return cells
+
 '''
     Crops image given starting x,y, width and eight
 '''
@@ -68,36 +69,63 @@ def crop(img,x, y, w, h):
 """
     cell_img should be GRAYSCALE image already
 """
-def get_matching(param, n, cell_img):
+def get_matching(param, n, cell_img, letters=False):
+    imgRatio, imgPostProcessed = preprocess_cell(cell_img)
     results = []
-    for i in range(n):
-        file_path = param + str(i + 1) + ".bmp"
+    i = 0
+    if letters:
+        i = 1
+    while i < n:
+        file_path = param + str(i) + ".bmp"
         template = cv2.imread(file_path)
-        # templateGray seems to give problems
-        print("Reading image")
-        print(file_path)
-        print(template)
-        templateGray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-        w, h = templateGray.shape[::-1]
-        res = cv2.matchTemplate(cell_img, template, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-        results.append(max_val)
+        templateDilated = prepare_template(template)
+        res = get_difference(imgPostProcessed, templateDilated)
+        results.append(res)
+        i = i + 1
+    if imgRatio < 3.00 and letters is False:
+        results[1] = MAX_VAL
+    if letters is False:
+        templateFiveTemp = cv2.imread(param + "5temp.bmp")
+        templateFiveToCompare = prepare_template(templateFiveTemp)
+        results.append(get_difference(imgPostProcessed, templateFiveToCompare))
     return results
+
+'''
+    Preprocessing of the template image to compare them to
+'''
+def prepare_template(template):
+    templateGray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    first_nonzero_col, last_nonzero_col = first_last_nonzero(templateGray, axis=0)
+    templateToCompare = templateGray[0: 85, first_nonzero_col:min(55,last_nonzero_col)]
+    templateDilated = cv2.dilate(templateToCompare, np.ones((3,3), np.uint8), iterations=1)
+    return templateDilated
 
 """
     Returns the character with the highest probability of matching with the samples in memory.
     Uses dictionaries to get the result from the index of the max of the function.
 """
 def template_matching(cell_img):
-    results_numbers = get_matching("SameSizeNumbers/", 9, cell_img)
-    results_letters = get_matching("SameSizeLetters/", 17, cell_img)
-    max_numbers = max(results_numbers)
-    max_letters = max(results_letters)
-    if max_letters > max_numbers:
-        return dictLetters[results_letters.index(max_letters)]
+    results_numbers = get_matching("numbers/", 10, cell_img)
+    results_letters = get_matching("letters/", 17, cell_img, True)
+    # assume that if the ratio is more than 1, it will be a one, always
+    min_numbers = min(results_numbers)
+    min_letters = min(results_letters)
+    if min_letters < min_numbers:
+        return dictLetters[results_letters.index(min_letters)]
     else:
-        return dictNumbers[results_numbers.index(max_numbers)]
+        return dictNumbers[results_numbers.index(min_numbers)]
 
+'''
+    Preprocesing the image: expecting BGR cropped image
+    Steps:
+    1. Grayscaling
+    2. Blurring
+    3. Normalization
+    4. Threshold
+    5. Inverse
+    6. Cropping
+    7. Resizing
+'''
 def preprocess_cell(img):
     # Grayscale
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -128,12 +156,16 @@ def preprocess_cell(img):
     else:
         # Resize - 85 * 55 is the size of the template images that are not a one or a default size letter
         imgResized = cv2.resize(imgCropped,(55,85))
-    return imgResized
+    return ratio, imgResized
 
-
+'''
+    Manual implementation of template matching.
+    Returns the sum of the absolute value of the differences of the two images to compare
+    The smaller the better.
+'''
 def get_difference(img, template):
     start = 0
-    min_val = 100000000
+    min_val = MAX_VAL
     while start + template.shape[1] <= img.shape[1]:
         SAD = np.sum(np.abs(img[0:0 + img.shape[0], start:start + template.shape[1]] - template))
         if SAD < min_val:
@@ -141,6 +173,9 @@ def get_difference(img, template):
         start = start + 1
     return min_val
 
+'''
+    Finds first and last occurrence of a nonzero element in a 2D array.
+'''
 def first_last_nonzero(arr, axis=0, invalid_val=-1):
     mask = arr!=0
     pos = np.where(mask.any(axis=axis), mask.argmax(axis=axis), invalid_val)
