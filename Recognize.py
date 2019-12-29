@@ -5,7 +5,7 @@ import os
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
 dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "5"}
 
-THRESHOLD_MSER = 1000
+THRESHOLD_MSER = 1250
 MAX_VAL = 100000000000
 
 """
@@ -29,11 +29,28 @@ Hints:
     This way you will be able to discard some matches.
 """
 def segment_and_recognize(plate_imgs):
-    cells = get_cells_from_plate(plate_imgs)
+    imgPlateClean = plate_morph(plate_imgs)
+    cells = get_cells_from_plate(imgPlateClean)
     license_plate = ""
     for cell in cells:
         license_plate = license_plate + template_matching(cell)
     return license_plate
+
+def plate_morph(img):
+    # Grayscale
+    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Noise reduction
+    imgBlurred = cv2.medianBlur(imgGray, 3)
+    # Normalization
+    imgNormalized = np.zeros((img.shape[0], img.shape[1]))
+    imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
+    # Digitization
+    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_BINARY)
+    # Invert colors
+    imgInverse = cv2.bitwise_not(imgThresholding)
+    # Resize to 125 * 600
+    imgResized = cv2.resize(imgInverse, (600, 125))
+    return imgResized
 
 """
     Given the image of a plate, break down the plate into cells each containing a potential character
@@ -47,10 +64,9 @@ def get_cells_from_plate(img_plate):
     mser.setMaxArea(image_size // 2)
     mser.setMinArea(10)
 
-    gray = cv2.cvtColor(img_plate, cv2.COLOR_BGR2GRAY)  # Converting to GrayScale
-    _, bw = cv2.threshold(gray, 0.0, 255.0, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-
     regions, rects = mser.detectRegions(bw)
+    # Sort the blobs by x-axis
+    rects = sorted(rects, key=lambda rec: rec[0])
 
     # With the rects you can e.g. crop the letters
     for (x, y, w, h) in rects:
@@ -107,7 +123,6 @@ def prepare_template(template):
 def template_matching(cell_img):
     results_numbers = get_matching("numbers/", 10, cell_img)
     results_letters = get_matching("letters/", 17, cell_img, True)
-    # assume that if the ratio is more than 1, it will be a one, always
     min_numbers = min(results_numbers)
     min_letters = min(results_letters)
     if min_letters < min_numbers:
@@ -127,21 +142,10 @@ def template_matching(cell_img):
     7. Resizing
 '''
 def preprocess_cell(img):
-    # Grayscale
-    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # Noise reduction
-    imgBlurred = cv2.medianBlur(imgGray, 3)
-    # Normalization
-    imgNormalized = np.zeros((img.shape[0], img.shape[1]))
-    imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
-    # Digitization
-    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_BINARY)
-    # Invert colors
-    imgInverse = cv2.bitwise_not(imgThresholding)
     # Crop out image
-    first_nonzero_col, last_nonzero_col = first_last_nonzero(imgInverse, axis=0)
-    first_nonzero_row, last_nonzero_row = first_last_nonzero(imgInverse, axis=1)
-    imgCropped = imgInverse[first_nonzero_row: last_nonzero_row, first_nonzero_col:last_nonzero_col]
+    first_nonzero_col, last_nonzero_col = first_last_nonzero(img, axis=0)
+    first_nonzero_row, last_nonzero_row = first_last_nonzero(img, axis=1)
+    imgCropped = img[first_nonzero_row: last_nonzero_row, first_nonzero_col:last_nonzero_col]
     # Ratio = width / height
     ratio = (last_nonzero_row - first_nonzero_row) /  (last_nonzero_col - first_nonzero_col)
     if ratio > 3.00:
