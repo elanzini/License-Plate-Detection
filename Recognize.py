@@ -28,6 +28,8 @@ Hints:
     Since not all the digits are the same, look at the ratio between height and width.
     This way you will be able to discard some matches.
 """
+
+
 def segment_and_recognize(plate_imgs):
     imgPlateClean = plate_morph(plate_imgs)
     cells = blob_detector(imgPlateClean)
@@ -36,21 +38,23 @@ def segment_and_recognize(plate_imgs):
         license_plate = license_plate + template_matching(cell)
     return license_plate
 
+
 def plate_morph(img):
     # Grayscale
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # Noise reduction
-    imgBlurred = cv2.medianBlur(imgGray, 3)
+    imgBlurred = cv2.medianBlur(imgGray, 1)
     # Normalization
     imgNormalized = np.zeros((img.shape[0], img.shape[1]))
     imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
     # Digitization
-    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_BINARY)
+    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_OTSU)
     # Invert colors
     imgInverse = cv2.bitwise_not(imgThresholding)
     # Resize to 125 * 600
     imgResized = cv2.resize(imgInverse, (600, 125))
     return imgResized
+
 
 """
     Given the image of a plate, break down the plate into cells each containing a potential character
@@ -76,11 +80,13 @@ def get_cells_from_plate(img_plate):
 
     return cells
 
+
 '''
     Crops image given starting x,y, width and eight
 '''
 def crop(img,x, y, w, h):
     return img[y:y + h, x:x + w]
+
 
 """
     cell_img should be GRAYSCALE image already
@@ -98,13 +104,16 @@ def get_matching(param, n, cell_img, letters=False):
         res = get_difference(imgPostProcessed, templateDilated)
         results.append(res)
         i = i + 1
-    if imgRatio < 3.00 and letters is False:
+    if imgRatio >= 2.50 and letters is False:
+        results[1] = 0
+    if imgRatio < 2.50 and letters is False:
         results[1] = MAX_VAL
     if letters is False:
         templateFiveTemp = cv2.imread(param + "5temp.bmp")
         templateFiveToCompare = prepare_template(templateFiveTemp)
         results.append(get_difference(imgPostProcessed, templateFiveToCompare))
     return results
+
 
 '''
     Preprocessing of the template image to compare them to
@@ -116,19 +125,21 @@ def prepare_template(template):
     templateDilated = cv2.dilate(templateToCompare, np.ones((3,3), np.uint8), iterations=1)
     return templateDilated
 
+
 """
     Returns the character with the highest probability of matching with the samples in memory.
     Uses dictionaries to get the result from the index of the max of the function.
 """
 def template_matching(cell_img):
     results_numbers = get_matching("numbers/", 10, cell_img)
-    results_letters = get_matching("letters/", 17, cell_img, True)
+    results_letters = get_matching("letters/", 18, cell_img, True)
     min_numbers = min(results_numbers)
     min_letters = min(results_letters)
     if min_letters < min_numbers:
         return dictLetters[results_letters.index(min_letters)]
     else:
         return dictNumbers[results_numbers.index(min_numbers)]
+
 
 '''
     Preprocesing the image: expecting BGR cropped image
@@ -148,19 +159,29 @@ def preprocess_cell(img):
     imgCropped = img[first_nonzero_row: last_nonzero_row, first_nonzero_col:last_nonzero_col]
     # Ratio = width / height
     ratio = (last_nonzero_row - first_nonzero_row) /  (last_nonzero_col - first_nonzero_col)
-    if ratio > 3.00:
+    if ratio > 2.50:
         # Resize - 80 * 20 is the size of the template images with a one
-        imgResized = cv2.resize(imgCropped,(20,85))
-    elif 2.00 < ratio < 3.00:
+        imgResized = cv2.resize(imgCropped, (20, 85))
+    elif 2.00 < ratio < 2.50:
         # Resize - 80 * 40 is the size of the template images with a J
-        imgResized = cv2.resize(imgCropped,(40,85))
-    elif 1.00 < ratio < 1.3:
+        imgResized = cv2.resize(imgCropped, (40, 85))
+    elif 1.65 <= ratio < 1.85:
+        # Resize
+        imgResized = cv2.resize(imgCropped, (50, 85))
+    elif 1.4 <= ratio < 1.65:
+        # Resize
+        imgResized = cv2.resize(imgCropped, (55, 85))
+    elif 1.2 < ratio < 1.4:
         # Resize - 80 * 20 is the size of the template images with an M
-        imgResized = cv2.resize(imgCropped,(70,85))
+        imgResized = cv2.resize(imgCropped, (65, 85))
+    elif 1.0 <= ratio <= 1.2:
+        # Resize - 80 * 20 is the size of the template images with an M
+        imgResized = cv2.resize(imgCropped, (75, 85))
     else:
         # Resize - 85 * 55 is the size of the template images that are not a one or a default size letter
-        imgResized = cv2.resize(imgCropped,(55,85))
+        imgResized = cv2.resize(imgCropped, (55, 85))
     return ratio, imgResized
+
 
 '''
     Manual implementation of template matching.
@@ -176,6 +197,7 @@ def get_difference(img, template):
             min_val = SAD
         start = start + 1
     return min_val
+
 
 '''
     Finds first and last occurrence of a nonzero element in a 2D array.
@@ -205,6 +227,7 @@ class Point:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
 
 class Blob:
     def __init__(self, min_x, max_x, min_y, max_y):
@@ -287,3 +310,6 @@ def crop_blob(img, blob):
 
 def get_ratio_blob(blob):
     return (blob.max_x - blob.min_x) / max((blob.max_y - blob.min_y),1)
+
+#TODO verify first last zero is not necessary and eliminate it
+#TODO why 5 is always B? Do some checking and try different morphological techinques
