@@ -275,7 +275,7 @@ def blob_detector(img):
             else:
                 visited[i][j] = True
     # sort blobs by x
-    blobs = sorted(blobs, key=lambda blob: blob.min_x)
+    blobs = sorted(blobs, key=lambda blob: blob.min_y)
     for blob in blobs:
         cells.append(crop_blob(img, blob))
     return cells
