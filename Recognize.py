@@ -30,7 +30,7 @@ Hints:
 """
 def segment_and_recognize(plate_imgs):
     imgPlateClean = plate_morph(plate_imgs)
-    cells = get_cells_from_plate(imgPlateClean)
+    cells = blob_detector(imgPlateClean)
     license_plate = ""
     for cell in cells:
         license_plate = license_plate + template_matching(cell)
@@ -64,7 +64,7 @@ def get_cells_from_plate(img_plate):
     mser.setMaxArea(image_size // 2)
     mser.setMinArea(10)
 
-    regions, rects = mser.detectRegions(bw)
+    regions, rects = mser.detectRegions(img_plate)
     # Sort the blobs by x-axis
     rects = sorted(rects, key=lambda rec: rec[0])
 
@@ -196,3 +196,94 @@ def first_last_nonzero(arr, axis=0, invalid_val=-1):
             else:
                 last_nonzero = i
     return first_nonzero, last_nonzero
+
+
+'''
+    Manual implementation of a blob detector using BFS search
+'''
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class Blob:
+    def __init__(self, min_x, max_x, min_y, max_y):
+        self.min_x = min_x
+        self.max_x = max_x
+        self.min_y = min_y
+        self.max_y = max_y
+
+
+def get_neighbours(i, j, img):
+    neighs = []
+    if i > 0:
+        if img[i-1][j] > 0 : neighs.append(Point(i-1,j))
+        if j > 0:
+            if img[i-1][j-1] > 0 : neighs.append(Point(i-1,j-1))
+        if j < img.shape[1]-1:
+            if img[i-1][j+1] > 0 : neighs.append(Point(i-1,j+1))
+    if j > 0:
+        if img[i][j-1] > 0 : neighs.append(Point(i,j-1))
+        if i < img.shape[0]-1:
+            if img[i+1][j-1] > 0 : neighs.append(Point(i+1,j-1))
+    if j < img.shape[1]-1:
+        if img[i][j+1] > 0 : neighs.append(Point(i,j+1))
+        if i < img.shape[0]-1:
+            if img[i+1][j+1] > 0 : neighs.append(Point(i+1,j+1))
+    if i < img.shape[0]-1:
+        if img[i+1][j] > 0 : neighs.append(Point(i+1,j))
+    return neighs
+
+
+def update_blob(point, blob):
+    if point.x < blob.min_x:
+        blob.min_x = point.x
+    if point.x > blob.max_x:
+        blob.max_x = point.x
+    if point.y < blob.min_y:
+        blob.min_y = point.y
+    if point.y > blob.max_y:
+        blob.max_y = point.y
+
+
+def blob_detector(img):
+    cells = []
+    blobs = []
+    visited = np.zeros((img.shape[0], img.shape[1]))
+    stack = []
+    for i, row in enumerate(img):
+        for j, col in enumerate(row):
+            if not visited[i][j] and img[i][j] > 0:
+                visited[i][j] = True
+                p = Point(i, j)
+                # row (i) = x
+                # col (j) = y
+                b = Blob(i, i, j, j)
+                stack.append(p)
+                while len(stack) > 0:
+                    point = stack.pop()
+                    # check all neighbours
+                    neighs = get_neighbours(point.x, point.y, img)
+                    # update the blob
+                    for neigh in neighs:
+                        if not visited[neigh.x][neigh.y]:
+                            visited[neigh.x][neigh.y] = True
+                            update_blob(neigh, b)
+                            # push the new points in the stack
+                            stack.append(neigh)
+                blobs.append(b)
+            else:
+                visited[i][j] = True
+    # sort blobs by x
+    blobs = sorted(blobs, key=lambda blob: blob.min_x)
+    for blob in blobs:
+        cells.append(crop_blob(img, blob))
+    return cells
+
+
+def crop_blob(img, blob):
+    return img[blob.min_x: blob.max_x+1, blob.min_y:blob.max_y+1]
+
+
+def get_ratio_blob(blob):
+    return (blob.max_x - blob.min_x) / max((blob.max_y - blob.min_y),1)
