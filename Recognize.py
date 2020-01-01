@@ -40,20 +40,69 @@ def segment_and_recognize(plate_imgs):
 
 
 def plate_morph(img):
+    # Brightness and Contrast
+    imgAdjusted, alpha, beta = automatic_brightness_and_contrast(img)
     # Grayscale
-    imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    imgGray = cv2.cvtColor(imgAdjusted, cv2.COLOR_BGR2GRAY)
     # Noise reduction
-    imgBlurred = cv2.medianBlur(imgGray, 1)
+    imgBlurred = cv2.medianBlur(imgGrayTest, 3)
     # Normalization
     imgNormalized = np.zeros((img.shape[0], img.shape[1]))
-    imgNormalized = cv2.normalize(imgBlurred,  imgNormalized, 0, 255, cv2.NORM_MINMAX)
-    # Digitization
-    ret, imgThresholding = cv2.threshold(imgNormalized ,100 ,255, cv2.THRESH_OTSU)
+    imgNormalized = cv2.normalize(imgBlurred, imgNormalized, 0, 125, cv2.NORM_MINMAX)
+    # Thresholding
+    imgThreshMean = cv2.adaptiveThreshold(imgNormalized, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 12)
     # Invert colors
-    imgInverse = cv2.bitwise_not(imgThresholding)
-    # Resize to 125 * 600
+    imgInverse = cv2.bitwise_not(imgThreshMean)
+    # Resize
     imgResized = cv2.resize(imgInverse, (600, 125))
     return imgResized
+
+
+# Automatic brightness and contrast optimization with optional histogram clipping
+def automatic_brightness_and_contrast(image, clip_hist_percent=1):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Calculate grayscale histogram
+    hist = cv2.calcHist([gray],[0],None,[256],[0,256])
+    hist_size = len(hist)
+
+    # Calculate cumulative distribution from the histogram
+    accumulator = []
+    accumulator.append(float(hist[0]))
+    for index in range(1, hist_size):
+        accumulator.append(accumulator[index -1] + float(hist[index]))
+
+    # Locate points to clip
+    maximum = accumulator[-1]
+    clip_hist_percent *= (maximum/100.0)
+    clip_hist_percent /= 2.0
+
+    # Locate left cut
+    minimum_gray = 0
+    while accumulator[minimum_gray] < clip_hist_percent:
+        minimum_gray += 1
+
+    # Locate right cut
+    maximum_gray = hist_size -1
+    while accumulator[maximum_gray] >= (maximum - clip_hist_percent):
+        maximum_gray -= 1
+
+    # Calculate alpha and beta values
+    alpha = 255 / (maximum_gray - minimum_gray)
+    beta = -minimum_gray * alpha
+
+    auto_result = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+    return auto_result, alpha, beta
+
+
+def get_average_brightness(imgHSV):
+    tempSum = 0
+    count = 0
+    for row in imgHSV:
+        for pixel in row:
+            tempSum = tempSum + pixel[2]
+            count = count  + 1
+    return tempSum / count
 
 
 """
@@ -104,10 +153,16 @@ def get_matching(param, n, cell_img, letters=False):
         res = get_difference(imgPostProcessed, templateDilated)
         results.append(res)
         i = i + 1
+    # Dealing with matching of 1
     if imgRatio >= 2.50 and letters is False:
         results[1] = 0
     if imgRatio < 2.50 and letters is False:
         results[1] = MAX_VAL
+    # Dealing with matching of J
+    if imgRatio >= 2.00 and letters:
+        results[5] = 0
+    if imgRatio < 2.00 and letters:
+        results[5] = MAX_VAL
     if letters is False:
         templateFiveTemp = cv2.imread(param + "5temp.bmp")
         templateFiveToCompare = prepare_template(templateFiveTemp)
@@ -294,7 +349,8 @@ def blob_detector(img):
                             update_blob(neigh, b)
                             # push the new points in the stack
                             stack.append(neigh)
-                blobs.append(b)
+                if 1.00 < get_ratio_blob(b) < 3.00 and get_area_blob(b) > 2500:
+                    blobs.append(b)
             else:
                 visited[i][j] = True
     # sort blobs by x
@@ -310,6 +366,11 @@ def crop_blob(img, blob):
 
 def get_ratio_blob(blob):
     return (blob.max_x - blob.min_x) / max((blob.max_y - blob.min_y),1)
+
+
+def get_area_blob(blob):
+    return (blob.max_x - blob.min_x) * max((blob.max_y - blob.min_y),1)
+
 
 #TODO verify first last zero is not necessary and eliminate it
 #TODO why 5 is always B? Do some checking and try different morphological techinques
