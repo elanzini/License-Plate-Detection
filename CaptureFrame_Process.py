@@ -35,7 +35,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
         for i in range(len(plate_images)):
 
             cv2.imshow("plate " + str(i), plate_images[i])
-            #print("plate " + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
+            print("plate " + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
 
     cap.release()
     cv2.destroyAllWindows()

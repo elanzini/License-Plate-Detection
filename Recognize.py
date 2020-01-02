@@ -45,7 +45,7 @@ def plate_morph(img):
     # Grayscale
     imgGray = cv2.cvtColor(imgAdjusted, cv2.COLOR_BGR2GRAY)
     # Noise reduction
-    imgBlurred = cv2.medianBlur(imgGrayTest, 3)
+    imgBlurred = cv2.medianBlur(imgGray, 3)
     # Normalization
     imgNormalized = np.zeros((img.shape[0], img.shape[1]))
     imgNormalized = cv2.normalize(imgBlurred, imgNormalized, 0, 125, cv2.NORM_MINMAX)
@@ -186,8 +186,8 @@ def prepare_template(template):
     Uses dictionaries to get the result from the index of the max of the function.
 """
 def template_matching(cell_img):
-    results_numbers = get_matching("numbers/", 10, cell_img)
-    results_letters = get_matching("letters/", 18, cell_img, True)
+    results_numbers = get_matching("SameSizeNumbers/", 10, cell_img)
+    results_letters = get_matching("SameSizeLetters/", 18, cell_img, True)
     min_numbers = min(results_numbers)
     min_letters = min(results_letters)
     if min_letters < min_numbers:
