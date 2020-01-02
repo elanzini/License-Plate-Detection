@@ -59,6 +59,7 @@ def plate_detection(input_image):
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=4)
 
     plates = []
+
     # Filtering connected components
 
     for label in range(num_labels):
@@ -77,6 +78,7 @@ def plate_detection(input_image):
             continue
 
         # Crop component
+
         x, y, w, h = cv2.boundingRect(np.argwhere(labels == label))
 
         cropped_component = image[x:x+w, y:y+h]
@@ -93,6 +95,8 @@ def plate_detection(input_image):
             cropped_component_size = cropped_component.size / 3
 
             color_match_ratio = yellow_component_parts / cropped_component_size
+
+            # Filtering by color matching ratio
 
             if color_match_ratio > color_match_ratio_threshold:
 
