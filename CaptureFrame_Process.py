@@ -26,20 +26,16 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     while cap.isOpened():
 
         ret, frame = cap.read()
-        # Converts each frame to gray scale
-
-        cv2.imshow('frame', frame)
-
-        plate = Localization.plate_detection(frame)
-
-        # Testing Canny Edge detector
-        # cv2.imwrite('fame.png', gray)
-        # cv2.imwrite('edges.png', edges)
-
-        time.sleep(.05)
+        cv2.imshow("Frame", frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+
+        plate_images = Localization.plate_detection(frame)
+        for i in range(len(plate_images)):
+
+            cv2.imshow("plate " + str(i), plate_images[i])
+            #print("plate " + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
 
     cap.release()
     cv2.destroyAllWindows()
