@@ -25,31 +25,22 @@ first_erosion_kernel = np.ones((3, 3), np.uint8)
 hsv_filter_lower = np.array([20, 100, 0], dtype="uint8")
 hsv_filter_upper = np.array([40, 255, 255], dtype="uint8")
 
-blob_detection_params = cv2.SimpleBlobDetector_Params()
-blob_detection_params.filterByArea = False
-blob_detection_params.filterByColor = False
-blob_detection_params.filterByConvexity = False
-blob_detection_params.filterByInertia = False
-
-blob_detector = cv2.SimpleBlobDetector.create(blob_detection_params)
-
 hsv_filter_lower_component = np.array([20, 80, 0], dtype="uint8")
 hsv_filter_upper_component = np.array([80, 255, 255], dtype="uint8")
-
-contrast = 3.0
 
 color_match_ratio_threshold = 0.1
 
 aspect_ratio_threshold = 1.5
 
-plate_opening_kernel_size_ratio = 5000
 
 def paste_component(canvas, component, message, location, color):
 
     canvas[location:location + component.shape[0], 0:component.shape[1]] = component
     cv2.putText(canvas, message, (component.shape[1], location + 20), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 1)
 
+
 def plate_detection(input_image):
+
     image = input_image
     height, width, channels = image.shape
 
@@ -67,8 +58,8 @@ def plate_detection(input_image):
     # Getting connected components
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=4)
 
-    # Filtering connected components
     plates = []
+    # Filtering connected components
 
     for label in range(num_labels):
 
@@ -82,9 +73,6 @@ def plate_detection(input_image):
         # Filtering by aspect ratio
 
         if aspect_ratio < aspect_ratio_threshold:
-
-            component_points = np.where(labels == label)
-            mask[component_points] = 0
 
             continue
 
@@ -109,7 +97,12 @@ def plate_detection(input_image):
             if color_match_ratio > color_match_ratio_threshold:
 
                 # Extracting plate from plate region
-                plates.append(plate_from_plate_region(cropped_component, yellow_mask))
+                plate = plate_from_plate_region(cropped_component, yellow_mask)
+
+                if plate is not None:
+                    plates.append(plate)
+
+    return plates
 
 
 def plate_from_plate_region(plate_region, yellow_mask):
@@ -119,6 +112,8 @@ def plate_from_plate_region(plate_region, yellow_mask):
 
     # Connected components detection
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(yellow_mask, connectivity=4)
+
+    # Getting connected component with max area
 
     max_connected_component_area = 0
     max_area_connected_component_label = -1
@@ -132,6 +127,7 @@ def plate_from_plate_region(plate_region, yellow_mask):
             max_connected_component_area = component_area
             max_area_connected_component_label = label
 
+    # Getting plate bounding tilted rectangle
     plate_center, plate_dimensions, plate_angle = cv2.minAreaRect(np.argwhere(labels == max_area_connected_component_label))
 
     plate_center = (int(plate_center[1]), int(plate_center[0]))
@@ -139,6 +135,7 @@ def plate_from_plate_region(plate_region, yellow_mask):
     if plate_dimensions[0] > plate_dimensions[1]:
 
         # Plate is tilted to the left
+
         plate_width = plate_dimensions[0]
         plate_height = plate_dimensions[1]
 
@@ -151,8 +148,12 @@ def plate_from_plate_region(plate_region, yellow_mask):
         plate_width = plate_dimensions[1]
         plate_height = plate_dimensions[0]
 
+    # Adjusting plate rotation
+
     rotation_matrix = cv2.getRotationMatrix2D(plate_center, -plate_angle, 1)
     plate_region = cv2.warpAffine(plate_region, rotation_matrix, plate_region.shape[1::-1])
+
+    # Cropping out plate
 
     half_plate_width = max(int(plate_width / 2), 1)
     half_plate_height = max(int(plate_height / 2), 1)
@@ -163,13 +164,10 @@ def plate_from_plate_region(plate_region, yellow_mask):
     plate_to_x = min(plate_center[0] + half_plate_width, width - 1)
 
     plate_from_y = max(plate_center[1] - half_plate_height, 0)
-    plate_to_y = min(plate_center[1] + half_plate_height, width - 1)
+    plate_to_y = min(plate_center[1] + half_plate_height, height - 1)
 
     plate_region_cropped = plate_region[plate_from_y:plate_to_y, plate_from_x:plate_to_x]
 
-    if plate_region_cropped.size == 0:
-        print("ciao")
-
     cv2.imshow("test", plate_region_cropped)
 
-
+    return plate_region_cropped
