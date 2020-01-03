@@ -42,6 +42,10 @@ def segment_and_recognize(plate_imgs):
     return license_plate
 
 
+def get_black_percentage(img):
+    return 1 - np.count_nonzero(img) / (img.shape[0] * img.shape[1])
+
+
 def plate_morph(img):
     # Brightness and Contrast
     imgAdjusted, alpha, beta = automatic_brightness_and_contrast(img)
@@ -56,8 +60,12 @@ def plate_morph(img):
     imgThreshMean = cv2.adaptiveThreshold(imgNormalized, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 12)
     # Invert colors
     imgInverse = cv2.bitwise_not(imgThreshMean)
+    imgErosion = imgInverse
+    if get_black_percentage(imgInverse) > 0.75:
+        # Erosion
+        imgErosion = cv2.dilate(imgInverse, np.ones((3, 3)), iterations=1)
     # Resize
-    imgResized = cv2.resize(imgInverse, (600, 125))
+    imgResized = cv2.resize(imgErosion, (600, 125))
     return imgResized
 
 
@@ -184,11 +192,20 @@ def prepare_template(template):
     return templateDilated
 
 
+def get_ratio_cell(cell):
+    return cell.shape[0] / cell.shape[1]
+
+
+def get_area_cell(cell):
+    return cell.shape[0] * cell.shape[1]
+
 """
     Returns the character with the highest probability of matching with the samples in memory.
     Uses dictionaries to get the result from the index of the max of the function.
 """
 def template_matching(cell_img):
+    if 300 < get_area_cell(cell_img) < 1000 and 0.4 < get_ratio_cell(cell_img) < 1.0:
+        return "-"
     results_numbers = get_matching("SameSizeNumbers/", 10, cell_img)
     results_letters = get_matching("SameSizeLetters/", 18, cell_img, True)
     min_numbers = min(results_numbers)
@@ -352,8 +369,18 @@ def blob_detector(img):
                             update_blob(neigh, b)
                             # push the new points in the stack
                             stack.append(neigh)
-                if 1.00 < get_ratio_blob(b) < 3.25 and get_area_blob(b) > 2500:
-                    blobs.append(b)
+
+                area_blob = get_area_blob(b)
+                ratio_blob = get_ratio_blob(b)
+
+                check_character = 0.8 < ratio_blob < 3.25 and area_blob > 2500
+                check_space = 0.4 < ratio_blob < 1.0 and 300 < area_blob < 1000
+                check_location_x = (img.shape[0] / 2 - img.shape[0] / 4) < (b.max_x + b.min_x) / 2 < (img.shape[0] / 2 + img.shape[0] / 4)
+                check_location_y = img.shape[1] / 6 < (b.max_y + b.min_y) / 2 < 5 * img.shape[1] / 6
+                check_divider = check_space and check_location_x and check_location_y
+
+                if check_character or check_divider:
+                        blobs.append(b)
             else:
                 visited[i][j] = True
     # sort blobs by x

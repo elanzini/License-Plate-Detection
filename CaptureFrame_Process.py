@@ -52,7 +52,9 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
             plate_images = Localization.plate_detection(frame)
 
             for i in range(len(plate_images)):
-                # cv2.imshow("Plate " + str(i), plate_images[i])
+                cv2.imshow("Plate " + str(i), plate_images[i])
+                # cv2.imwrite("Plates/img_" + str(scene_count) + ".png", plate_images[i])
+                cv2.waitKey()
                 # Compute Time and License Plate
                 end_time = time.time()
                 license_plate = Recognize.segment_and_recognize(plate_images[i])
@@ -61,7 +63,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                 scene_count = scene_count + 1
 
                 # print("Found after: " + str((end_time - start_time)))
-                # print("License Plate" + str(i) + ": " + license_plate)
+                print("License Plate" + str(i) + ": " + license_plate)
             # cv2.waitKey()
 
             last_frame = frame
