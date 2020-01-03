@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+import main
 
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
 dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "5"}
@@ -32,6 +33,8 @@ Hints:
 
 def segment_and_recognize(plate_imgs):
     imgPlateClean = plate_morph(plate_imgs)
+    if main.DEBUG:
+        cv2.imshow("Clean", imgPlateClean)
     cells = blob_detector(imgPlateClean)
     license_plate = ""
     for cell in cells:
@@ -349,7 +352,7 @@ def blob_detector(img):
                             update_blob(neigh, b)
                             # push the new points in the stack
                             stack.append(neigh)
-                if 1.00 < get_ratio_blob(b) < 3.00 and get_area_blob(b) > 2500:
+                if 1.00 < get_ratio_blob(b) < 3.25 and get_area_blob(b) > 2500:
                     blobs.append(b)
             else:
                 visited[i][j] = True
@@ -370,7 +373,3 @@ def get_ratio_blob(blob):
 
 def get_area_blob(blob):
     return (blob.max_x - blob.min_x) * max((blob.max_y - blob.min_y),1)
-
-
-#TODO verify first last zero is not necessary and eliminate it
-#TODO why 5 is always B? Do some checking and try different morphological techinques

@@ -2,6 +2,8 @@ import argparse
 import os
 import CaptureFrame_Process
 
+DEBUG = False
+
 # define the required arguments: video path(file_path), sample frequency(second), saving path for final result table
 # for more information of 'argparse' module, see https://docs.python.org/3/library/argparse.html
 def get_args():

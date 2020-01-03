@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import Localization
 import Recognize
+import Shot_Transition
 import time
 
 """
@@ -19,23 +20,46 @@ Inputs:(three)
 Output: None
 """
 
-def CaptureFrame_Process(file_path, sample_frequency, save_path):
+THRESHOLD_SCENE = 0.9
 
+
+def CaptureFrame_Process(file_path, sample_frequency, save_path):
+    start_time = time.time()
+    last_frame = None
+    frame_count = 0
     cap = cv2.VideoCapture(file_path)
 
     while cap.isOpened():
 
-        ret, frame = cap.read()
-        cv2.imshow("Frame", frame)
+        frame_count = frame_count + 1
+        print("frame number: " + str(frame_count))
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        ret, frame = cap.read()
+
+        if frame is None:
             break
 
-        plate_images = Localization.plate_detection(frame)
-        for i in range(len(plate_images)):
+        if last_frame is None or Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE:
 
-            cv2.imshow("plate " + str(i), plate_images[i])
-            print("plate " + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
+            cv2.imshow("NEW SCENE", frame)
+            plate_images = Localization.plate_detection(frame)
+
+            for i in range(len(plate_images)):
+                # cv2.imshow("Plate " + str(i), plate_images[i])
+                end_time = time.time()
+                print("Found after: " + str((end_time - start_time)))
+                print("License Plate" + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
+            cv2.waitKey()
+
+            last_frame = frame
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+class Output:
+    def __init__(self, frame_number, time_plate, plate_img=None, license_plate=None):
+        self.plate_img = plate_img
+        self.frame_number = frame_number
+        self.time_plate = time_plate
+        self.license_plate = license_plate
