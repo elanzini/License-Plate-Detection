@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import Localization
 import Recognize
+import Shot_Transition
 import time
 
 """
@@ -19,23 +20,61 @@ Inputs:(three)
 Output: None
 """
 
+THRESHOLD_SCENE = 0.9
+
+
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
+    # Output csv
+    df = pd.DataFrame(columns=['License Plate', 'Frame no.', 'Timestamp(seconds)'])
+
+    # Time tracker + Frame Counter
+    start_time = time.time()
+    frame_count = 0
+    scene_count = 0
+
+    last_frame = None
     cap = cv2.VideoCapture(file_path)
 
     while cap.isOpened():
 
-        ret, frame = cap.read()
-        cv2.imshow("Frame", frame)
+        frame_count = frame_count + 1
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        ret, frame = cap.read()
+
+        if frame is None:
+            df.to_csv("outDetection.csv", encoding='utf-8', index=False)
             break
 
-        plate_images = Localization.plate_detection(frame)
-        for i in range(len(plate_images)):
+        if last_frame is None or Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE:
 
-            cv2.imshow("plate " + str(i), plate_images[i])
-            print("plate " + str(i) + ": " + Recognize.segment_and_recognize(plate_images[i]))
+            # cv2.imshow("NEW SCENE", frame)
+            plate_images = Localization.plate_detection(frame)
+
+            for i in range(len(plate_images)):
+                cv2.imshow("Plate " + str(i), plate_images[i])
+                # cv2.imwrite("Plates/img_" + str(scene_count) + ".png", plate_images[i])
+                cv2.waitKey()
+                # Compute Time and License Plate
+                end_time = time.time()
+                license_plate = Recognize.segment_and_recognize(plate_images[i])
+
+                df.loc[scene_count] = [license_plate] + [frame_count] + [end_time]
+                scene_count = scene_count + 1
+
+                # print("Found after: " + str((end_time - start_time)))
+                print("License Plate" + str(i) + ": " + license_plate)
+            # cv2.waitKey()
+
+            last_frame = frame
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+class Output:
+    def __init__(self, frame_number, time_plate=0, plate_img=None, license_plate=None):
+        self.plate_img = plate_img
+        self.frame_number = frame_number
+        self.time_plate = time_plate
+        self.license_plate = license_plate
