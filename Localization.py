@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import main
 
 """
 In this file, you need to define plate_detection function.
@@ -172,6 +173,7 @@ def plate_from_plate_region(plate_region, yellow_mask):
 
     plate_region_cropped = plate_region[plate_from_y:plate_to_y, plate_from_x:plate_to_x]
 
-    cv2.imshow("test", plate_region_cropped)
+    if main.DEBUG:
+        cv2.imshow("test", plate_region_cropped)
 
     return plate_region_cropped
