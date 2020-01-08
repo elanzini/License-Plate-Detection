@@ -21,6 +21,7 @@ Output: None
 """
 
 THRESHOLD_SCENE = 0.9
+THRESHOLD_ECR = 0.15
 
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
@@ -31,6 +32,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     # Time tracker + Frame Counter
     start_time = time.time()
     frame_count = 0
+    plate_not_found = True
     scene_count = 0
 
     last_frame = None
@@ -46,25 +48,46 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
             df.to_csv("outDetection.csv", encoding='utf-8', index=False)
             break
 
-        if last_frame is None or Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE:
+        if last_frame is None or \
+                (Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE or
+                 Shot_Transition.ECR(frame, last_frame, frame.shape[1], frame.shape[0]) < THRESHOLD_ECR):
 
-            # cv2.imshow("NEW SCENE", frame)
+            plate_not_found = True
+            cv2.imshow("Scene", frame)
+            cv2.waitKey()
             plate_images = Localization.plate_detection(frame)
 
             for i in range(len(plate_images)):
-                cv2.imshow("Plate " + str(i), plate_images[i])
-                # cv2.imwrite("Plates/img_" + str(scene_count) + ".png", plate_images[i])
-                cv2.waitKey()
                 # Compute Time and License Plate
-                end_time = time.time()
-                license_plate = Recognize.segment_and_recognize(plate_images[i])
+                ratio_plate = plate_images[i].shape[1]/plate_images[i].shape[0]
+                if ratio_plate > 3.75:
+                    license_plate = Recognize.segment_and_recognize(plate_images[i])
+                    if len(license_plate) == 8:
+                        print("License Plate: " + license_plate)
+                        end_time = time.time()
+                        time_to_compute = '%.3f' % (end_time - start_time)
+                        df.loc[scene_count] = [license_plate] + [frame_count] + [time_to_compute]
+                        plate_not_found = False
 
-                df.loc[scene_count] = [license_plate] + [frame_count] + [end_time]
                 scene_count = scene_count + 1
 
-                # print("Found after: " + str((end_time - start_time)))
-                print("License Plate" + str(i) + ": " + license_plate)
-            # cv2.waitKey()
+            last_frame = frame
+
+        elif plate_not_found:
+            plate_images = Localization.plate_detection(frame)
+            for i in range(len(plate_images)):
+                # Compute Time and License Plate
+                ratio_plate = plate_images[i].shape[1] / plate_images[i].shape[0]
+                if ratio_plate > 3.75:
+                    license_plate = Recognize.segment_and_recognize(plate_images[i])
+                    if len(license_plate) == 8:
+                        print("License Plate: " + license_plate)
+                        end_time = time.time()
+                        time_to_compute = '%.3f' % (end_time - start_time)
+                        df.loc[scene_count] = [license_plate] + [frame_count] + [time_to_compute]
+                        plate_not_found = False
+
+                scene_count = scene_count + 1
 
             last_frame = frame
 

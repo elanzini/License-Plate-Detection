@@ -18,7 +18,7 @@ if __name__ == '__main__':
 	# firstFrames = ground_truth['First frame'].tolist()
 	# lastFrames = ground_truth['Last frame'].tolist()
 	result = np.zeros((totalPlates, 4))
-	# 0: TP, 1: FP, 3: LTP
+	# 0: TP, 1: FP, 2: LTP
 
 
 	# Find the last frame and number of plates for each category
@@ -40,25 +40,16 @@ if __name__ == '__main__':
 			solutionPlate = ground_truth['License plate'][index]
 			solutionTimeStamp = ground_truth['Timestamp'][index]
 			if licensePlate == solutionPlate:
-				if timeStamp <= solutionTimeStamp + 0.5:
+				if timeStamp <= solutionTimeStamp + 2:
 					result[index, 0] += 1
 				else:
 					result[index, 2] += 1
+				if j == 1:
+					result[index-1, 1] -= 1
+				elif j == 0:
+					break
 			else:
 				result[index, 1] += 1
-	# Remove FPs that have been wrongly counted
-	for i in range(totalPlates-1):
-		if ground_truth['Timestamp'][i] == ground_truth['Timestamp'][i+1]:
-			temp = result[i,1]
-			result[i, 1] -= result[i+1, 1]
-			result[i+1, 1] -= temp
-			if result[i, 1] % 2 == 1:
-				result[i, 1] -= 1
-				result[i+1, 1] += 1
-			result[i, 1] /= 2
-			result[i+1, 1] /= 2
-
-
 
 	# Initialize arrays to save the final results per category
 	TP = np.zeros(numCategories)
@@ -69,7 +60,7 @@ if __name__ == '__main__':
 	print('---------------------------------------------------------')
 	print('%20s'%'License plate', '%10s'%'Result')
 	for i in range(totalPlates):
-		cat = ground_truth['Category'][i]-1
+		cat = int(ground_truth['Category'][i]-1)
 		if result[i, 0] + result[i, 2] + result[i, 1] == 0:
 			finalResult = 'FN'
 			FN[cat] += 1
