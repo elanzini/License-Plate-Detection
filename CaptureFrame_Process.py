@@ -1,9 +1,11 @@
 import cv2
 import os
+import re
 import pandas as pd
 import Localization
 import Recognize
 import Shot_Transition
+import Validator
 import time
 
 """
@@ -34,6 +36,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     frame_count = 0
     plate_not_found = True
     scene_count = 0
+    last_license_plate = None
 
     last_frame = None
     cap = cv2.VideoCapture(file_path)
@@ -53,8 +56,9 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                  Shot_Transition.ECR(frame, last_frame, frame.shape[1], frame.shape[0]) < THRESHOLD_ECR):
 
             plate_not_found = True
-            cv2.imshow("Scene", frame)
-            cv2.waitKey()
+            # cv2.imshow("Scene", frame)
+            # cv2.waitKey()
+
             plate_images = Localization.plate_detection(frame)
 
             for i in range(len(plate_images)):
@@ -62,12 +66,19 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                 ratio_plate = plate_images[i].shape[1]/plate_images[i].shape[0]
                 if ratio_plate > 3.75:
                     license_plate = Recognize.segment_and_recognize(plate_images[i])
-                    if len(license_plate) == 8:
-                        print("License Plate: " + license_plate)
-                        end_time = time.time()
-                        time_to_compute = '%.3f' % (end_time - start_time)
-                        df.loc[scene_count] = [license_plate] + [frame_count] + [time_to_compute]
-                        plate_not_found = False
+                    # cv2.imshow("Plate", plate_images[i])
+                    # cv2.waitKey()
+                    # cv2.imwrite("Plates/plate_" + str(frame_count) + "_" + str(i) + ".png", plate_images[i])
+                    print("License Plate: " + license_plate)
+                    if Validator.pattern_check_dutch_license(license_plate):
+                        if last_license_plate is None or hamming_distance(last_license_plate, license_plate) > 3:
+                            # print("License Plate: " + license_plate)
+                            print("The plate is valid")
+                            end_time = time.time()
+                            time_to_compute = '%.3f' % (end_time - start_time)
+                            df.loc[scene_count] = [license_plate] + [frame_count] + [1]
+                            plate_not_found = False
+                            last_license_plate = license_plate
 
                 scene_count = scene_count + 1
 
@@ -80,12 +91,19 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                 ratio_plate = plate_images[i].shape[1] / plate_images[i].shape[0]
                 if ratio_plate > 3.75:
                     license_plate = Recognize.segment_and_recognize(plate_images[i])
-                    if len(license_plate) == 8:
-                        print("License Plate: " + license_plate)
-                        end_time = time.time()
-                        time_to_compute = '%.3f' % (end_time - start_time)
-                        df.loc[scene_count] = [license_plate] + [frame_count] + [time_to_compute]
-                        plate_not_found = False
+                    # cv2.imshow("Plate", plate_images[i])
+                    # cv2.waitKey()
+                    # cv2.imwrite("Plates/plate_" + str(frame_count) + "_" + str(i) + ".png", plate_images[i])
+                    print("License Plate: " + license_plate)
+                    if Validator.pattern_check_dutch_license(license_plate):
+                        if last_license_plate is None or hamming_distance(last_license_plate, license_plate) > 3:
+                            # print("License Plate: " + license_plate)
+                            print("The plate is valid")
+                            end_time = time.time()
+                            time_to_compute = '%.3f' % (end_time - start_time)
+                            df.loc[scene_count] = [license_plate] + [frame_count] + [1]
+                            plate_not_found = False
+                            last_license_plate = license_plate
 
                 scene_count = scene_count + 1
 
@@ -94,10 +112,5 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     cap.release()
     cv2.destroyAllWindows()
 
-
-class Output:
-    def __init__(self, frame_number, time_plate=0, plate_img=None, license_plate=None):
-        self.plate_img = plate_img
-        self.frame_number = frame_number
-        self.time_plate = time_plate
-        self.license_plate = license_plate
+def hamming_distance(s1, s2):
+    return sum(c1 != c2 for c1, c2 in zip(s1, s2))
