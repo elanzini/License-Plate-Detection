@@ -10,13 +10,27 @@ centroid_y_threshold = .2
 letter_component_max_width_ratio = 1 / 4
 letter_component_height_min_ratio = 1 / 2
 
-min_number_of_letters = 5
+expected_number_of_letters = 5
 
 kernel_2x2 = np.ones((2, 2), dtype="uint8")
 kernel_3x3 = np.ones((2, 2), dtype="uint8")
 
-def load_letter_templates():
+letter_open_kernel = kernel_2x2
 
+max_expected_letters = 6
+
+DEBUG = False
+debug_plate_letters_image_colors = np.array([
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255]
+], dtype="uint8")
+
+histogram_bins_width = 5
+histogram_bins = np.arange(0, 255, histogram_bins_width)
+
+
+def load_letter_templates():
     raw_templates = [
         [cv2.imread("SameSizeLetters/1.bmp"), "B"],
         [cv2.imread("SameSizeLetters/2.bmp"), "D"],
@@ -51,7 +65,6 @@ def load_letter_templates():
     result = []
 
     for letter_template_image_raw, letter in raw_templates:
-
         raw_height = letter_template_image_raw.shape[0]
 
         letter_template_image_raw = cv2.cvtColor(letter_template_image_raw, cv2.COLOR_BGR2GRAY)
@@ -79,11 +92,9 @@ def load_letter_templates():
 
 
 def resize_templates(templates, height):
-
     for template in templates:
 
         if height not in template:
-
             default_height = template['default_height']
             default_template_image = template[default_height]["image"]
 
@@ -104,20 +115,17 @@ letter_templates = load_letter_templates()
 
 
 def count_mismatches_same_size(image1, image2):
-    
     count = 0
 
     for i in range(image1.shape[0]):
         for j in range(image1.shape[1]):
             if image1[i, j] != image2[i, j]:
-
                 count += 1
 
     return count
 
 
 def count_mismatches_different_size(min_width_image, max_width_image):
-
     min_width = min_width_image.shape[1]
     max_width = max_width_image.shape[1]
 
@@ -151,83 +159,7 @@ def count_mismatches_different_size(min_width_image, max_width_image):
     return mismatches
 
 
-def recognize_plate(plate):
-
-    height, width, _ = plate.shape
-
-    # Filtering by aspect ratio
-
-    aspect_ratio = width / height
-
-    if aspect_ratio < aspect_ratio_threshold:
-        print("invalid aspect ratio")
-        return None
-
-    # Filtering letters color
-
-    plate_gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
-
-    plate_black_mask = cv2.inRange(plate_gray, letter_lower_limit, letter_upper_limit)
-
-    # Applying 2x2 erosion to reduce noise
-
-    plate_black_mask = cv2.erode(plate_black_mask, np.ones((2, 2), dtype="uint8"))
-
-    # Applying 2x2 dilation
-    plate_black_mask = cv2.dilate(plate_black_mask, np.ones((2, 2), dtype="uint8"))
-
-    cv2.imshow("black mask eroded", plate_black_mask)
-
-    # Detecting connected components
-
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(plate_black_mask)
-
-    if num_labels < min_number_of_letters:
-        print("too few labels")
-        return None
-
-    letters = 0
-
-    centroid_lower_y_limit = int(height / 2 - centroid_y_threshold * height)
-    centroid_upper_y_limit = int(height / 2 + centroid_y_threshold * height)
-
-    min_component_height = int(letter_component_height_min_ratio * height)
-
-    black_mask_filtered = cv2.cvtColor(plate_black_mask, cv2.COLOR_GRAY2BGR)
-
-    for label in range(num_labels):
-
-        # Filtering by centroid position
-        if centroids[label][1] < centroid_lower_y_limit or centroids[label][1] > centroid_upper_y_limit:
-
-            black_mask_filtered[np.where(labels == label)] = (255, 0, 0)
-            continue
-
-        # Filtering by component width
-        if stats[label, cv2.CC_STAT_WIDTH] > width * letter_component_max_width_ratio:
-
-            black_mask_filtered[np.where(labels == label)] = (0, 255, 0)
-            continue
-
-        # Filtering by component height
-        if stats[label, cv2.CC_STAT_HEIGHT] < min_component_height:
-
-            black_mask_filtered[np.where(labels == label)] = (0, 0, 255)
-            continue
-
-        letters += 1
-
-    cv2.imshow("black mask filtered", black_mask_filtered)
-
-
-histogram_bins_width = 5
-histogram_bins = np.arange(0, 255, histogram_bins_width)
-
-letter_index = 0
-
-
-def recognize_plate_edges(plate):
-
+def recognize_plate(plate, plate_color):
     height, width, _ = plate.shape
     plate_grayscale = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
 
@@ -235,14 +167,15 @@ def recognize_plate_edges(plate):
 
     edges = cv2.Canny(plate, 100, 200)
 
-    # Applying dilation
+    # Dilating edges
 
-    edges = cv2.dilate(edges, np.array((2,2), dtype="uint8"))
+    edges = cv2.dilate(edges, kernel_2x2)
 
-    cv2.imshow("edges", edges)
+    if DEBUG:
+        cv2.imshow("edges", edges)
 
     # Blob detection
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(edges)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(edges, connectivity=8)
 
     centroid_lower_y_limit = int(height / 2 - centroid_y_threshold * height)
     centroid_upper_y_limit = int(height / 2 + centroid_y_threshold * height)
@@ -251,7 +184,7 @@ def recognize_plate_edges(plate):
 
     max_component_width = width * letter_component_max_width_ratio
 
-    letter_masks = {}
+    letters = []
 
     for label in range(num_labels):
 
@@ -274,7 +207,7 @@ def recognize_plate_edges(plate):
         x = stats[label, cv2.CC_STAT_LEFT]
         y = stats[label, cv2.CC_STAT_TOP]
 
-        letter_grayscale = plate_grayscale[y:y+letter_height, x:x+letter_width]
+        letter_grayscale = plate_grayscale[y:y + letter_height, x:x + letter_width]
 
         letter_grayscale_histogram = np.histogram(letter_grayscale, bins=histogram_bins)[0]
 
@@ -290,34 +223,93 @@ def recognize_plate_edges(plate):
         letter_mask = np.zeros(letter_grayscale.shape, dtype="uint8")
         letter_mask[np.where(letter_grayscale < threshold)] = 255
 
-        # Eroding letter_mask
-        # letter_mask = cv2.erode(letter_mask, kernel_2x2)
+        letter_mask = cv2.morphologyEx(letter_mask, cv2.MORPH_OPEN, letter_open_kernel)
 
-        letter_masks.update({
-            x: letter_mask
+        letters.append({
+            'position': x,
+            'letter_mask': letter_mask
         })
 
-    if len(letter_masks) < min_number_of_letters:
-        print("not enough letters")
-        return
+    licence_plate_letters = []
 
-    licence_plate = []
+    if DEBUG:
+        debug_plate_letters_image = np.zeros(plate.shape, dtype="uint8")
+        debug_plate_color_index = 0
+        debug_plate_pointer = 0
 
-    global letter_index
+    for letter in letters:
 
-    for letter_mask_key in sorted(letter_masks):
+        letter_mask = letter['letter_mask']
 
-        letter_mask = letter_masks[letter_mask_key]
+        recognized_letter, error_ratio = recognize_letter(letter_mask)
 
-        cv2.imwrite("letters/" + str(letter_index) + ".bmp", letter_mask)
-        letter_index += 1
-        licence_plate.append(recognize_letter(letter_mask))
+        licence_plate_letters.append({
+            'recognized_letter': recognized_letter,
+            'error_ratio': error_ratio,
+            'position': letter['position'],
+            'width': letter_mask.shape[1]
+        })
 
-    print(''.join(licence_plate))
+        if DEBUG:
+            debug_colored_letter = np.zeros((letter_mask.shape[0], letter_mask.shape[1], 3), dtype="uint8")
+            debug_colored_letter[np.where(letter_mask > 0)] = debug_plate_letters_image_colors[debug_plate_color_index]
+
+            debug_plate_color_index = (debug_plate_color_index + 1) % len(debug_plate_letters_image_colors)
+
+            debug_plate_letters_image[
+            0:debug_colored_letter.shape[0],
+            debug_plate_pointer:debug_plate_pointer + letter_mask.shape[1]
+            ] = debug_colored_letter
+
+            debug_plate_pointer += letter_mask.shape[1]
+
+    if DEBUG:
+        cv2.imshow("debug plate", debug_plate_letters_image)
+
+    if len(licence_plate_letters) > max_expected_letters:
+
+        min_error_ratio_letters = sorted(licence_plate_letters, key=lambda letter: letter['error_ratio'])[
+                                  :max_expected_letters]
+        min_error_ratio_letters = sorted(min_error_ratio_letters, key=lambda letter: letter['position'])
+
+    else:
+
+        min_error_ratio_letters = sorted(licence_plate_letters, key=lambda letter: letter['position'])
+
+    licence_plate = [letter['recognized_letter'] for letter in min_error_ratio_letters]
+
+    # Dashes
+
+    if plate_color == 'yellow' and len(licence_plate) == 6:
+
+        gap_0_1 = min_error_ratio_letters[1]['position'] - min_error_ratio_letters[0]['position'] - \
+                  min_error_ratio_letters[0]['width']
+
+        gap_1_2 = min_error_ratio_letters[2]['position'] - min_error_ratio_letters[1]['position'] - \
+                  min_error_ratio_letters[1]['width']
+
+        if gap_0_1 > gap_1_2:
+
+            licence_plate.insert(1, '-')
+            licence_plate.insert(5, '-')
+
+        else:
+            licence_plate.insert(2, '-')
+
+            gap_3_4 = min_error_ratio_letters[4]['position'] - min_error_ratio_letters[3]['position'] - \
+                      min_error_ratio_letters[3]['width']
+            gap_4_5 = min_error_ratio_letters[5]['position'] - min_error_ratio_letters[4]['position'] - \
+                      min_error_ratio_letters[4]['width']
+
+            if gap_3_4 > gap_4_5:
+                licence_plate.insert(5, '-')
+            else:
+                licence_plate.insert(6, '-')
+
+    return ''.join(licence_plate)
 
 
 def recognize_letter(letter_mask):
-
     letter_mask_height = letter_mask.shape[0]
 
     # Generating template matching size if not already existing
@@ -327,6 +319,8 @@ def recognize_letter(letter_mask):
 
     min_mismatches = letter_mask.size
     min_mismatches_letter = "!"
+
+    error_ratio = 1
 
     for letter_template in letter_templates:
 
@@ -342,6 +336,7 @@ def recognize_letter(letter_mask):
                 min_width_image=letter_template_image,
                 max_width_image=letter_mask
             )
+            comparison_size = letter_mask.size
 
         elif letter_mask_width < letter_template_width:
 
@@ -350,13 +345,17 @@ def recognize_letter(letter_mask):
                 max_width_image=letter_template_image
             )
 
+            comparison_size = letter_template_image.size
+
         else:
 
             mismatches = count_mismatches_same_size(letter_template_image, letter_mask)
+            comparison_size = letter_template_image.size
 
         if mismatches < min_mismatches:
             min_mismatches = mismatches
             min_mismatches_letter = letter_template["letter"]
+            error_ratio = min_mismatches / comparison_size
 
     if min_mismatches_letter == "8":
         min_mismatches_letter = verify_8_letter(letter_mask)
@@ -364,14 +363,13 @@ def recognize_letter(letter_mask):
     if min_mismatches_letter == "Z":
         min_mismatches_letter = verify_z_letter(letter_mask)
 
-    return min_mismatches_letter
+    return min_mismatches_letter, error_ratio
 
 
 verify_8_critical_region_threshold = 0.6
 
 
 def verify_8_letter(letter_mask):
-
     letter_mask_height = letter_mask.shape[0]
 
     critical_region_height = int(letter_mask_height / 6)
@@ -391,8 +389,8 @@ def verify_8_letter(letter_mask):
 
 verify_z_critical_region_threshold = 0.38
 
-def verify_z_letter(letter_mask):
 
+def verify_z_letter(letter_mask):
     letter_mask_height = letter_mask.shape[0]
 
     critical_region_height = int(letter_mask_height / 6)
@@ -401,10 +399,7 @@ def verify_z_letter(letter_mask):
 
     critical_region_size = letter_mask.shape[0] * critical_region_height
 
-    print(cv2.countNonZero(critical_region) / critical_region_size)
-
     if cv2.countNonZero(critical_region) / critical_region_size > verify_z_critical_region_threshold:
         return "Z"
     else:
-        return "(2)"
-
+        return "2"
