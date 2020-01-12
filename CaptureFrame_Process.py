@@ -1,11 +1,9 @@
 import cv2
 import os
-import re
 import pandas as pd
-import Localization
-import Recognize
 import Shot_Transition
 import LightPlateRecognition
+import LightLocalization
 import Validator
 import time
 
@@ -52,7 +50,7 @@ def parse_frame(frame):
     global start_time
     global df
 
-    plate_color, plate_images = Localization.locate_plates(frame)
+    plate_color, plate_images = LightLocalization.locate_plates(frame)
     for i in range(len(plate_images)):
         # cv2.imshow("Plate", plate_images[i])
         # cv2.waitKey()
