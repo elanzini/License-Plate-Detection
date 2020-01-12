@@ -1,9 +1,12 @@
 import cv2
 import os
+import re
 import pandas as pd
 import Localization
 import Recognize
 import Shot_Transition
+import LightPlateRecognition
+import Validator
 import time
 
 """
@@ -21,24 +24,76 @@ Output: None
 """
 
 THRESHOLD_SCENE = 0.9
+THRESHOLD_ECR = 0.15
+
+
+frame_count = 0
+plate_not_found = True
+scene_count = 0
+last_license_plate = None
+last_frame = None
+plate_not_found = True
+start_time = 0
+
+# Output csv
+df = pd.DataFrame(columns=['License plate', 'Frame no.', 'Timestamp(seconds)'])
+
+
+def hamming_distance(s1, s2):
+    return sum(c1 != c2 for c1, c2 in zip(s1, s2))
+
+
+def parse_frame(frame):
+
+    global last_license_plate
+    global scene_count
+    global last_frame
+    global plate_not_found
+    global start_time
+    global df
+
+    plate_color, plate_images = Localization.locate_plates(frame)
+    for i in range(len(plate_images)):
+        # cv2.imshow("Plate", plate_images[i])
+        # cv2.waitKey()
+
+        # Compute Time and License Plate
+        ratio_plate = plate_images[i].shape[1] / plate_images[i].shape[0]
+        license_plate = LightPlateRecognition.recognize_plate(plate_images[i], plate_color)
+        # cv2.imwrite("Plates/plate_" + str(frame_count) + "_" + str(i) + ".png", plate_images[i])
+        print("License Plate: " + license_plate)
+
+        if (plate_color is 'yellow' and Validator.pattern_check_dutch_license(license_plate)) or \
+                (plate_color is not 'yellow'):
+            if last_license_plate is None or hamming_distance(last_license_plate, license_plate) > 3:
+                # print("License Plate: " + license_plate)
+                print("The plate is valid")
+                end_time = time.time()
+                time_to_compute = '%.3f' % (end_time - start_time)
+                df.loc[scene_count] = [license_plate] + [frame_count] + [time_to_compute]
+                plate_not_found = False
+                last_license_plate = license_plate
+
+        scene_count += 1
+
+    last_frame = frame
 
 
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
-    # Output csv
-    df = pd.DataFrame(columns=['License Plate', 'Frame no.', 'Timestamp(seconds)'])
+    global frame_count
+    global plate_not_found
+    global scene_count
+    global last_license_plate
+    global start_time
+    global df
 
-    # Time tracker + Frame Counter
-    start_time = time.time()
-    frame_count = 0
-    scene_count = 0
-
-    last_frame = None
     cap = cv2.VideoCapture(file_path)
+    start_time = time.time()
 
     while cap.isOpened():
 
-        frame_count = frame_count + 1
+        frame_count += 1
 
         ret, frame = cap.read()
 
@@ -46,35 +101,19 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
             df.to_csv("outDetection.csv", encoding='utf-8', index=False)
             break
 
-        if last_frame is None or Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE:
+        if last_frame is None or \
+                (Shot_Transition.get_histogram_correlation_grayscale(frame, last_frame) < THRESHOLD_SCENE or
+                 Shot_Transition.ECR(frame, last_frame, frame.shape[1], frame.shape[0]) < THRESHOLD_ECR):
 
-            # cv2.imshow("NEW SCENE", frame)
-            plate_images = Localization.plate_detection(frame)
-
-            for i in range(len(plate_images)):
-                cv2.imshow("Plate " + str(i), plate_images[i])
-                # cv2.imwrite("Plates/img_" + str(scene_count) + ".png", plate_images[i])
-                cv2.waitKey()
-                # Compute Time and License Plate
-                end_time = time.time()
-                license_plate = Recognize.segment_and_recognize(plate_images[i])
-
-                df.loc[scene_count] = [license_plate] + [frame_count] + [end_time]
-                scene_count = scene_count + 1
-
-                # print("Found after: " + str((end_time - start_time)))
-                print("License Plate" + str(i) + ": " + license_plate)
+            plate_not_found = True
+            # cv2.imshow("Scene", frame)
             # cv2.waitKey()
 
-            last_frame = frame
+            parse_frame(frame)
+
+        elif plate_not_found:
+
+            parse_frame(frame)
 
     cap.release()
     cv2.destroyAllWindows()
-
-
-class Output:
-    def __init__(self, frame_number, time_plate=0, plate_img=None, license_plate=None):
-        self.plate_img = plate_img
-        self.frame_number = frame_number
-        self.time_plate = time_plate
-        self.license_plate = license_plate
