@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 import main
+import Validator
 
 dictLetters = {0: "B", 1: "D", 2: "F", 3: "G", 4: "H", 5: "J", 6: "K", 7: "L", 8: "M", 9: "N", 10: "P", 11: "R", 12: "S", 13: "T", 14: "V", 15: "X", 16: "Z"}
 dictNumbers = {0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "5"}
@@ -57,7 +58,7 @@ def plate_morph(img):
     imgNormalized = np.zeros((img.shape[0], img.shape[1]))
     imgNormalized = cv2.normalize(imgBlurred, imgNormalized, 0, 125, cv2.NORM_MINMAX)
     # Thresholding
-    imgThreshMean = cv2.adaptiveThreshold(imgNormalized, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, 12)
+    imgThreshMean = cv2.adaptiveThreshold(imgNormalized, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 25, 9)
     # Invert colors
     imgInverse = cv2.bitwise_not(imgThreshMean)
     imgErosion = imgInverse
@@ -116,31 +117,6 @@ def get_average_brightness(imgHSV):
     return tempSum / count
 
 
-"""
-    Given the image of a plate, break down the plate into cells each containing a potential character
-"""
-def get_cells_from_plate(img_plate):
-    cells = []
-
-    (h, w) = img_plate.shape[:2]
-    image_size = h * w
-    mser = cv2.MSER_create()
-    mser.setMaxArea(image_size // 2)
-    mser.setMinArea(10)
-
-    regions, rects = mser.detectRegions(img_plate)
-    # Sort the blobs by x-axis
-    rects = sorted(rects, key=lambda rec: rec[0])
-
-    # With the rects you can e.g. crop the letters
-    for (x, y, w, h) in rects:
-        if w * h > THRESHOLD_MSER:
-            cells.append(img_plate[y:y + h, x:x + w])
-            cv2.rectangle(img_plate, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=1)
-
-    return cells
-
-
 '''
     Crops image given starting x,y, width and eight
 '''
@@ -170,10 +146,10 @@ def get_matching(param, n, cell_img, letters=False):
     if imgRatio < 2.50 and letters is False:
         results[1] = MAX_VAL
     # Dealing with matching of J
-    if imgRatio >= 2.00 and letters:
-        results[5] = 0
-    if imgRatio < 2.00 and letters:
-        results[5] = MAX_VAL
+    # if imgRatio >= 1.5 and letters:
+    #     results[5] = 0
+    # if imgRatio < 1.5 and letters:
+    #     results[5] = MAX_VAL
     if letters is False:
         templateFiveTemp = cv2.imread(param + "5temp.bmp")
         templateFiveToCompare = prepare_template(templateFiveTemp)
@@ -211,9 +187,20 @@ def template_matching(cell_img):
     min_numbers = min(results_numbers)
     min_letters = min(results_letters)
     if min_letters < min_numbers:
+        if results_letters.index(min_letters) == 0:
+            return Validator.verify_b_letter(cell_img)
+        if results_letters.index(min_letters) == 5:
+            if not Validator.verify_j_letter(cell_img):
+                results_letters[5] = MAX_VAL
+                return Validator.evaluate(results_numbers, results_letters)
+            else:
+                return "J"
         return dictLetters[results_letters.index(min_letters)]
     else:
-        return dictNumbers[results_numbers.index(min_numbers)]
+        if results_numbers.index(min_numbers) == 2:
+            return Validator.verify_z_letter(cell_img)
+        else:
+            return dictNumbers[results_numbers.index(min_numbers)]
 
 
 '''

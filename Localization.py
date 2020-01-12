@@ -119,7 +119,7 @@ def locate_plate_by_color(input_image, color):
 
                 if plate is not None:
                     plates.append(plate)
-                    cv2.imshow("plate", plate)
+                    # cv2.imshow("plate", plate)
 
     return plates
 

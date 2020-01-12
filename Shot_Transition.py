@@ -14,13 +14,35 @@ def get_histogram_correlation_grayscale(curr_frame, last_frame):
     return cv2.compareHist(hist_curr, hist_last, 0)
 
 
+def get_histogram_correlation_quarter(curr_frame, last_frame):
+    gray_curr = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+    gray_last = cv2.cvtColor(last_frame, cv2.COLOR_BGR2GRAY)
+
+    gray_curr_half = gray_curr[0:gray_curr.shape[0]//2, 0:gray_curr.shape[1]//2]
+    gray_last_half = gray_last[0:gray_last.shape[0]//2, 0:gray_last.shape[1]//2]
+
+    bins = 5
+
+    hist_curr = cv2.calcHist([gray_curr_half],[0],None,[bins],[0,256])
+    hist_last = cv2.calcHist([gray_last_half],[0],None,[bins],[0,256])
+    return cv2.compareHist(hist_curr, hist_last, 0)
+
+
+def compute_difference_frame(curr_frame, last_frame):
+    gray_curr = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+    gray_last = cv2.cvtColor(last_frame, cv2.COLOR_BGR2GRAY)
+
+    diff = gray_curr - gray_last
+    return get_mean_frame(diff)
+
+
 def get_histogram_correlation(curr_frame, last_frame):
     hsv_curr = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2HSV)
     hsv_last = cv2.cvtColor(last_frame, cv2.COLOR_BGR2HSV)
 
     hsv_curr_half = hsv_curr[hsv_curr.shape[0] // 2:, :]
-    h_bins = 50
-    s_bins = 60
+    h_bins = 5
+    s_bins = 5
     histSize = [h_bins, s_bins]
     # hue varies from 0 to 179, saturation from 0 to 255
     h_ranges = [0, 180]
@@ -86,8 +108,8 @@ def ECR(frame, prev_frame, width, height, crop=True, dilate_rate = 5):
     pixels_sum_old = np.sum(edge2)
     out_pixels = np.sum(log_and1)
     in_pixels = np.sum(log_and2)
-    return max(safe_div(float(in_pixels),float(pixels_sum_new)), safe_div(float(out_pixels),float(pixels_sum_old)))
+    return 1 - max(safe_div(float(in_pixels),float(pixels_sum_new)), safe_div(float(out_pixels),float(pixels_sum_old)))
 
 
 def get_mean_frame(frame):
-    return np.sum(frame) / float(frame.shape[0] * frame.shape[1] * frame.shape[2])
+    return np.sum(frame) / float(frame.shape[0] * frame.shape[1])
