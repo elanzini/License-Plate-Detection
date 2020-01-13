@@ -21,7 +21,7 @@ letter_open_kernel = kernel_2x2
 
 expected_letters = 6
 
-DEBUG = True
+DEBUG = False
 debug_plate_letters_image_colors = np.array([
     [255, 255, 0],
     [0, 255, 255],
@@ -172,6 +172,7 @@ def count_mismatches(
 
 
 def recognize_plate(plate, plate_color):
+
     plate = fix_perspective(plate)
 
     # Detecting edges
@@ -260,7 +261,8 @@ def recognize_plate(plate, plate_color):
             'recognized_letter': recognized_letter,
             'error_ratio': error_ratio,
             'position': letter['position'],
-            'width': letter_mask.shape[1]
+            'width': letter_mask.shape[1],
+            'centroid_x_abs': letter['centroid_x'] + letter['position']
         })
 
         if DEBUG:
@@ -300,11 +302,15 @@ def recognize_plate(plate, plate_color):
 
     if plate_color == 'yellow' and len(licence_plate) == 6:
 
+        """
         gap_0_1 = min_error_ratio_letters[1]['position'] - min_error_ratio_letters[0]['position'] - \
                   min_error_ratio_letters[0]['width']
 
         gap_1_2 = min_error_ratio_letters[2]['position'] - min_error_ratio_letters[1]['position'] - \
                   min_error_ratio_letters[1]['width']
+        """
+        gap_0_1 = min_error_ratio_letters[1]['centroid_x_abs'] - min_error_ratio_letters[0]['centroid_x_abs']
+        gap_1_2 = min_error_ratio_letters[2]['centroid_x_abs'] - min_error_ratio_letters[1]['centroid_x_abs']
 
         if gap_0_1 > gap_1_2:
 
@@ -315,10 +321,14 @@ def recognize_plate(plate, plate_color):
         else:
             licence_plate.insert(2, '-')
 
+            """
             gap_3_4 = min_error_ratio_letters[4]['position'] - min_error_ratio_letters[3]['position'] - \
                       min_error_ratio_letters[3]['width']
             gap_4_5 = min_error_ratio_letters[5]['position'] - min_error_ratio_letters[4]['position'] - \
                       min_error_ratio_letters[4]['width']
+            """
+            gap_3_4 = min_error_ratio_letters[4]['centroid_x_abs'] - min_error_ratio_letters[3]['centroid_x_abs']
+            gap_4_5 = min_error_ratio_letters[5]['centroid_x_abs'] - min_error_ratio_letters[4]['centroid_x_abs']
 
             if gap_3_4 > gap_4_5:
                 licence_plate.insert(5, '-')
