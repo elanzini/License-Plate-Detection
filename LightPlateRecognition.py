@@ -300,7 +300,7 @@ def recognize_plate(plate, plate_color):
 
     # Dashes
 
-    if plate_color == 'yellow' and len(licence_plate) == 6:
+    if plate_color == 'yellow' or plate_color == 'yellow_red_image' and len(licence_plate) == 6:
 
         """
         gap_0_1 = min_error_ratio_letters[1]['position'] - min_error_ratio_letters[0]['position'] - \

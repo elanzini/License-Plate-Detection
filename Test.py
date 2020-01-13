@@ -14,6 +14,11 @@ recognized_plates = {}
 
 plates_count = 0
 
+plate_colors = [
+    'yellow',
+    'yellow_red_image'
+]
+
 while cap.isOpened():
 
     ret, frame = cap.read()
@@ -26,7 +31,12 @@ while cap.isOpened():
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    plates_color, plate_images = LightLocalization.locate_plates(frame, "yellow")
+    for plate_color in plate_colors:
+
+        plates_color, plate_images = LightLocalization.locate_plates(frame, plate_color)
+
+        if len(plate_images) > 0:
+            break
 
     for i in range(len(plate_images)):
         cv2.imshow("plate " + str(i), plate_images[i])
@@ -56,7 +66,6 @@ while cap.isOpened():
                 recognized_plates.update({
                     plate: 1
                 })
-    time.sleep(1)
 
 most_common_plate = "!"
 most_common_plate_occurrences = 0

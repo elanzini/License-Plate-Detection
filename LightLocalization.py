@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-DEBUG = True
+DEBUG = False
 
 min_plate_width = 80
 min_plate_height = 20
@@ -19,6 +19,10 @@ color_filters = {
     'yellow': {
         'lower': np.array([15, 80, 80], dtype='uint8'),
         'upper': np.array([80, 255, 255], dtype='uint8')
+    },
+    'yellow_red_image': {
+        'lower': np.array([0, 120, 80], dtype='uint8'),
+        'upper': np.array([15, 255, 255], dtype='uint8')
     }
 }
 
@@ -52,6 +56,9 @@ def locate_plates(image, plates_color='yellow'):
     # Getting connected components
 
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
+
+    if DEBUG:
+        cv2.imshow("color mask", apply_mask(image, color_mask))
 
     for label in range(1, num_labels):
 
