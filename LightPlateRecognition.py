@@ -302,13 +302,6 @@ def recognize_plate(plate, plate_color):
 
     if plate_color == 'yellow' or plate_color == 'yellow_red_image' and len(licence_plate) == 6:
 
-        """
-        gap_0_1 = min_error_ratio_letters[1]['position'] - min_error_ratio_letters[0]['position'] - \
-                  min_error_ratio_letters[0]['width']
-
-        gap_1_2 = min_error_ratio_letters[2]['position'] - min_error_ratio_letters[1]['position'] - \
-                  min_error_ratio_letters[1]['width']
-        """
         gap_0_1 = min_error_ratio_letters[1]['centroid_x_abs'] - min_error_ratio_letters[0]['centroid_x_abs']
         gap_1_2 = min_error_ratio_letters[2]['centroid_x_abs'] - min_error_ratio_letters[1]['centroid_x_abs']
 
@@ -316,17 +309,10 @@ def recognize_plate(plate, plate_color):
 
             licence_plate.insert(1, '-')
             licence_plate.insert(5, '-')
-            print(str(gap_0_1) + "   " + str(gap_1_2))
 
         else:
             licence_plate.insert(2, '-')
 
-            """
-            gap_3_4 = min_error_ratio_letters[4]['position'] - min_error_ratio_letters[3]['position'] - \
-                      min_error_ratio_letters[3]['width']
-            gap_4_5 = min_error_ratio_letters[5]['position'] - min_error_ratio_letters[4]['position'] - \
-                      min_error_ratio_letters[4]['width']
-            """
             gap_3_4 = min_error_ratio_letters[4]['centroid_x_abs'] - min_error_ratio_letters[3]['centroid_x_abs']
             gap_4_5 = min_error_ratio_letters[5]['centroid_x_abs'] - min_error_ratio_letters[4]['centroid_x_abs']
 

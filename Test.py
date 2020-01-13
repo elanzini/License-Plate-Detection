@@ -3,8 +3,8 @@ import LightLocalization
 import LightPlateRecognition
 import time
 
-filename = 'TrainingSet\Categorie I\Video2_2.avi'
-# filename = 'trainingsvideo.avi'
+# filename = 'TrainingSet\Categorie IV\Video89_2.avi'
+filename = 'trainingsvideo.avi'
 
 cap = cv2.VideoCapture(filename)
 
@@ -16,7 +16,8 @@ plates_count = 0
 
 plate_colors = [
     'yellow',
-    'yellow_red_image'
+    'yellow_red_image',
+    'white'
 ]
 
 while cap.isOpened():

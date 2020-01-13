@@ -23,6 +23,10 @@ color_filters = {
     'yellow_red_image': {
         'lower': np.array([0, 120, 80], dtype='uint8'),
         'upper': np.array([15, 255, 255], dtype='uint8')
+    },
+    'white': {
+        'lower': np.array([0, 0, 180], dtype='uint8'),
+        'upper': np.array([255, 20, 255], dtype='uint8')
     }
 }
 
@@ -57,7 +61,7 @@ def locate_plates(image, plates_color='yellow'):
 
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
 
-    if DEBUG:
+    if DEBUG and plates_color == 'white':
         cv2.imshow("color mask", apply_mask(image, color_mask))
 
     for label in range(1, num_labels):
