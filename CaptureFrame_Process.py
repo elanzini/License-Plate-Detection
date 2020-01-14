@@ -3,8 +3,8 @@ import pandas as pd
 import Shot_Transition
 import Validator
 import time
-import LightPlateRecognition
-import LightLocalization
+import PlateRecognition
+import Localization
 """
 In this file, you will define your own CaptureFrame_Process funtion. In this function,
 you need three arguments: file_path(str type, the video file), sample_frequency(second), save_path(final results saving path).
@@ -74,6 +74,61 @@ def get_time_to_compute(start_time, current_time):
     return '%.3f' % (current_time - start_time)
 
 
+def merge_similar_plates(plates_dict, max_hamming_distance):
+
+    n = len(plates_dict)
+
+    plates = list(plates_dict.keys())
+
+    plates = sorted(plates, key=lambda plate: -plates_dict[plate])
+
+    plates_to_join = []
+
+    for i in range(n - 1):
+        for j in range(i + 1, n):
+
+            plate_i = plates[i]
+            plate_j = plates[j]
+
+            if hamming_distance(plate_i, plate_j) <= max_hamming_distance:
+
+                plates_to_join.append(plate_i)
+                plates_to_join.append(plate_j)
+
+            if len(plates_to_join) > 0:
+                break
+
+        if len(plates_to_join) > 0:
+            break
+
+    if len(plates_to_join) > 0:
+
+        new_plates_dict = plates_dict.copy()
+
+        if plates_dict[plates_to_join[0]] > plates_dict[plates_to_join[1]]:
+
+            del new_plates_dict[plates_to_join[0]]
+            del new_plates_dict[plates_to_join[1]]
+
+            new_plates_dict.update({
+                plates_to_join[0]: plates_dict[plates_to_join[0]] + plates_dict[plates_to_join[1]]
+            })
+
+        else:
+
+            del new_plates_dict[plates_to_join[0]]
+            del new_plates_dict[plates_to_join[1]]
+
+            new_plates_dict.update({
+                plates_to_join[1]: plates_dict[plates_to_join[0]] + plates_dict[plates_to_join[1]]
+            })
+
+        return merge_similar_plates(new_plates_dict, max_hamming_distance)
+
+    else:
+
+        return plates_dict
+
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
     cap = cv2.VideoCapture(file_path)
@@ -110,13 +165,14 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
         total_frames_counter += 1
 
-        plates_color, plates = LightLocalization.find_plates(frame)
+        plates_color, plates = Localization.find_plates(frame)
 
         cv2.imshow("frame", frame)
 
         if is_new_scene(previous_frame, frame):
 
-            cv2.imshow("new scene frame", frame)
+            if DEBUG:
+                cv2.imshow("new scene frame", frame)
 
             scenes.append(scene.copy())
             scene = {
@@ -143,7 +199,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
         for i, plate in enumerate(plates):
 
-            recognized_plate = LightPlateRecognition.recognize_plate(plate, plates_color)
+            recognized_plate = PlateRecognition.recognize_plate(plate, plates_color)
 
             if recognized_plate is None:
                 continue
@@ -169,17 +225,19 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
     scenes.append(scene)
 
-    for scene in scenes:
-        print(scene)
+    if DEBUG:
+        for scene in scenes:
+            print(scene)
 
-    print("\n\n")
+        print("\n")
 
     scenes = [scene for scene in scenes if scene['frame_counter'] > 0 and len(scene['plates']) > 0]
 
-    for scene in scenes:
-        print(scene)
+    if DEBUG:
+        for scene in scenes:
+            print(scene)
 
-    print("\n\n")
+        print("\n")
 
     scenes_joined = []
 
@@ -201,13 +259,44 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
     scenes_joined.append(current_joined_scene)
 
+    if DEBUG:
+        for scene in scenes_joined:
+            print(scene)
+        print('\n')
+
     for scene in scenes_joined:
-        print(scene)
 
-    for i, scene in enumerate(scenes_joined):
+        scene.update({
+            'plates': merge_similar_plates(scene['plates'], 3)
+        })
 
-        plate = get_most_common_plate_in_scene(scene)
-        df.loc[i] = [plate] + [(scene['first_frame'] + scene['frame_counter'] // 2)] + [plates_time_to_compute[plate]]
+    if DEBUG:
+        for scene in scenes_joined:
+            print(scene)
+        print('\n')
+
+    plates_counter = 0
+
+    for scene in scenes_joined:
+
+        if len(scene['plates']) > 1:
+
+            total_scene_plates = sum(scene['plates'].values())
+
+            for plate in scene['plates']:
+
+                plate_matches_count = scene['plates'][plate]
+
+                if plate_matches_count / total_scene_plates >= 0.2:
+                    df.loc[plates_counter] = [plate] + [(scene['first_frame'] + scene['frame_counter'] // 2)] + [plates_time_to_compute[plate]]
+                    plates_counter += 1
+
+        else:
+
+            plate = get_most_common_plate_in_scene(scene)
+
+            df.loc[plates_counter] = [plate] + [(scene['first_frame'] + scene['frame_counter'] // 2)] + [plates_time_to_compute[plate]]
+            plates_counter += 1
 
     df.to_csv("out.csv", encoding="utf-8", index=False)
 

@@ -11,7 +11,7 @@ DEBUG = False
 def get_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--file_path', type=str, default='trainingsvideo.avi')
-	# parser.add_argument('--file_path', type=str, default='TrainingSet\Categorie III\Video100_2.avi')
+	# parser.add_argument('--file_path', type=str, default='TrainingSet\Categorie III\Video47_2.avi')
 	parser.add_argument('--output_path', type=str, default=None)
 	parser.add_argument('--sample_frequency', type=int, default=2)
 	args = parser.parse_args()

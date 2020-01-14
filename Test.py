@@ -1,6 +1,6 @@
 import cv2
-import LightLocalization
-import LightPlateRecognition
+import Localization
+import PlateRecognition
 import time
 
 filename = 'TrainingSet\Categorie III\Video57_2.avi'
@@ -34,7 +34,7 @@ while cap.isOpened():
 
     for plate_color in plate_colors:
 
-        plates_color, plate_images = LightLocalization.locate_plates(frame, plate_color)
+        plates_color, plate_images = Localization.locate_plates(frame, plate_color)
 
         if len(plate_images) > 0:
             break
@@ -50,7 +50,7 @@ while cap.isOpened():
 
     for i in range(len(plate_images)):
 
-        plate = LightPlateRecognition.recognize_plate(plate_images[i], plates_color)
+        plate = PlateRecognition.recognize_plate(plate_images[i], plates_color)
 
         if plate is not None:
             plates_count += 1
