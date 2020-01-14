@@ -1,202 +1,185 @@
-import cv2
 import numpy as np
+import cv2
 
-first_dilation_kernel = np.ones((10, 20), np.uint8)
-first_dilation_iterations = 3
+DEBUG = False
 
-first_erosion_kernel = np.ones((2, 2), np.uint8)
+min_plate_width = 75
+min_plate_height = 18
 
-region_color_match_ratio_threshold = 0.1
+min_plate_area = min_plate_width * min_plate_height
 
-region_aspect_ratio_threshold = 1.5
+kernel_2x2 = np.ones((2, 2), dtype="uint8")
 
-region_dilation_kernel = np.ones((2, 2), dtype='uint8')
-
-min_plate_width = 80
-min_plate_height = 20
-
-white_sensitivity = 60
-white_region_sensitivity = 100
+kernel_20x10 = np.ones((20, 10), dtype="uint8")
 
 color_filters = {
     'yellow': {
-        'lower': np.array([20, 100, 0], dtype='uint8'),
-        'upper': np.array([40, 255, 255], dtype='uint8'),
-        'region_lower': np.array([15, 100, 100], dtype='uint8'),
-        'region_upper': np.array([80, 255, 255], dtype='uint8')
+        'lower': np.array([15, 80, 80], dtype='uint8'),
+        'upper': np.array([80, 255, 255], dtype='uint8')
     },
-    'white': {
-        'lower': np.array([0, 0, 255 - white_sensitivity], dtype='uint8'),
-        'upper': np.array([255, white_sensitivity, 255], dtype='uint8'),
-        'region_lower': np.array([0, 0, 255 - white_region_sensitivity], dtype='uint8'),
-        'region_upper': np.array([255, white_region_sensitivity, 255], dtype='uint8')
+    'yellow_red_image': {
+        'lower': np.array([0, 120, 80], dtype='uint8'),
+        'upper': np.array([15, 255, 255], dtype='uint8')
     }
 }
 
+min_cc_aspect_ratio = 1.5
 
-possible_plate_colors = [
-    'yellow',
-    #'white'
-]
+min_plate_aspect_ratio = (300 / 66) * 0.7
 
-
-def locate_plates(frame):
-
-    for plate_color in possible_plate_colors:
-
-        plates_by_color = locate_plate_by_color(frame, plate_color)
-
-        if len(plates_by_color) > 0:
-
-            return plate_color, plates_by_color
-
-    return None, []
+min_plate_color_match_ratio = 0.3
 
 
-def locate_plate_by_color(input_image, color):
+def apply_mask(image, mask):
+    return cv2.bitwise_and(image, image, mask=mask)
 
-    image = input_image
-    height, width, channels = image.shape
 
-    hsv_image = cv2.cvtColor(input_image, cv2.COLOR_BGR2HSV)
+def find_plates(image):
 
-    # HSV Filter
-    mask = cv2.inRange(hsv_image, color_filters[color]['lower'], color_filters[color]['upper'])
+    for color in color_filters:
 
-    # Applying erosion
-    mask = cv2.erode(mask, first_erosion_kernel, iterations=1)
+        plates_color, plates = locate_plates_by_color(image, color)
 
-    # Applying dilation
-    mask = cv2.dilate(mask, first_dilation_kernel, iterations=first_dilation_iterations)
+        if len(plates) > 0:
 
-    # Getting connected components
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=4)
+            return plates_color, plates
+
+    return "unknown", []
+
+
+def locate_plates_by_color(image, plates_color='yellow'):
+
+    # Converting to HSV
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # Masking for color
+    hsv_filter = color_filters[plates_color]
+
+    color_mask = cv2.inRange(hsv_image, hsv_filter['lower'], hsv_filter['upper'])
+
+    # Closing mask
+
+    color_mask = cv2.morphologyEx(color_mask, cv2.MORPH_CLOSE, kernel_20x10)
 
     plates = []
 
-    # Filtering connected components
+    # Getting connected components
 
-    for label in range(num_labels):
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
 
-        # Excluding black background
+    if DEBUG:
+        cv2.imshow("color mask", apply_mask(image, color_mask))
+        debug_mask = np.zeros(image.shape, dtype='uint8')
 
-        if stats[label, cv2.CC_STAT_WIDTH] == width and stats[label, cv2.CC_STAT_HEIGHT] == height:
-            continue
 
-        aspect_ratio = stats[label, cv2.CC_STAT_WIDTH] / stats[label, cv2.CC_STAT_HEIGHT]
+    for label in range(1, num_labels):
 
-        # Filtering by aspect ratio
-
-        if aspect_ratio < region_aspect_ratio_threshold:
-            continue
-
-        y, x, h, w = (
-            stats[label, cv2.CC_STAT_TOP],
-            stats[label, cv2.CC_STAT_LEFT],
+        h, w = (
             stats[label, cv2.CC_STAT_HEIGHT],
-            stats[label, cv2.CC_STAT_WIDTH],
+            stats[label, cv2.CC_STAT_WIDTH]
         )
 
-        if h > 0 and w > 0:
+        # Filtering by area
+        if stats[label, cv2.CC_STAT_AREA] < min_plate_area:
 
-            plate_color_mask = cv2.inRange(
-                hsv_image[y:y+h, x:x+w],
-                color_filters[color]['region_lower'],
-                color_filters[color]['region_upper']
-            )
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 0, 0], dtype='uint8')
 
-            matching_color_component_parts = cv2.countNonZero(plate_color_mask)
-            cropped_component_size = h * w
+            continue
 
-            color_match_ratio = matching_color_component_parts / cropped_component_size
+        aspect_ratio = w / h
 
-            # Filtering by color matching ratio
+        # Filtering by connected component aspect ratio
+        if aspect_ratio < min_cc_aspect_ratio:
 
-            if color_match_ratio > region_color_match_ratio_threshold:
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([0, 255, 0], dtype='uint8')
 
-                # Extracting plate from plate region
-                plate = plate_from_plate_region(image[y:y + h, x:x + w], plate_color_mask)
+            continue
 
-                if plate is not None:
-                    plates.append(plate)
-                    # cv2.imshow("plate", plate)
+        plate_points = np.argwhere(labels == label)
 
-    return plates
+        plate_center, plate_dimensions, plate_angle = cv2.minAreaRect(plate_points)
 
+        plate_center = (int(plate_center[1]), int(plate_center[0]))
 
-def plate_from_plate_region(plate_region, plate_color_mask):
+        if plate_dimensions[0] > plate_dimensions[1]:
 
-    # Dilation
-    plate_color_mask = cv2.dilate(plate_color_mask, region_dilation_kernel)
+            # Plate is tilted to the left
 
-    # Connected components detection
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(plate_color_mask, connectivity=4)
+            plate_width = plate_dimensions[0]
+            plate_height = plate_dimensions[1]
 
-    # Getting connected component with max area
+            plate_angle += 90
 
-    max_connected_component_area = 0
-    max_area_connected_component_label = -1
+        else:
 
-    for label in range(num_labels):
+            # Plate is tilted to the right
 
-        component_area = stats[label, cv2.CC_STAT_AREA]
-        component_size = stats[label, cv2.CC_STAT_WIDTH] * stats[label, cv2.CC_STAT_HEIGHT]
+            plate_width = plate_dimensions[1]
+            plate_height = plate_dimensions[0]
 
-        if plate_color_mask.size > component_size and component_area > max_connected_component_area:
-            max_connected_component_area = component_area
-            max_area_connected_component_label = label
+        # Filtering by plate size
 
-    # Getting plate bounding tilted rectangle
-    plate_points = np.argwhere(labels == max_area_connected_component_label)
-    plate_center, plate_dimensions, plate_angle = cv2.minAreaRect(plate_points)
+        if plate_width < min_plate_width:
 
-    plate_center = (int(plate_center[1]), int(plate_center[0]))
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 255, 0], dtype='uint8')
 
-    if plate_dimensions[0] > plate_dimensions[1]:
+            continue
 
-        # Plate is tilted to the left
+        if plate_height < min_plate_height:
 
-        plate_width = plate_dimensions[0]
-        plate_height = plate_dimensions[1]
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 0, 255], dtype='uint8')
 
-        plate_angle += 90
+            continue
 
-    else:
+        y, x = (
+            stats[label, cv2.CC_STAT_TOP],
+            stats[label, cv2.CC_STAT_LEFT],
+        )
 
-        # Plate is tilted to the right
+        # Cropping plate region
 
-        plate_width = plate_dimensions[1]
-        plate_height = plate_dimensions[0]
+        plate_region = image[y:y+h, x:x+w]
 
-    # Filtering by plate size
+        # Rotating plate
 
-    if plate_width < min_plate_width:
+        rotation_center = (plate_center[0] - x, plate_center[1] - y)
+        rotation_matrix = cv2.getRotationMatrix2D(rotation_center, -plate_angle, 1)
+        plate_region = cv2.warpAffine(plate_region, rotation_matrix, plate_region.shape[1::-1])
 
-        return None
+        # Cropping out plate
 
-    if plate_height < min_plate_height:
+        half_plate_width = int(plate_width / 2)
+        half_plate_height = int(plate_height / 2)
 
-        return None
+        plate_from_x = max(rotation_center[0] - half_plate_width, 0)
+        plate_to_x = min(rotation_center[0] + half_plate_width, w - 1)
 
-    # Adjusting plate rotation
+        plate_from_y = max(rotation_center[1] - half_plate_height, 0)
+        plate_to_y = min(rotation_center[1] + half_plate_height, h - 1)
 
-    rotation_matrix = cv2.getRotationMatrix2D(plate_center, -plate_angle, 1)
-    plate_region = cv2.warpAffine(plate_region, rotation_matrix, plate_region.shape[1::-1])
+        plate = plate_region[plate_from_y:plate_to_y, plate_from_x:plate_to_x]
 
-    # Cropping out plate
+        # Filtering by color match ratio
+        plate_hsv = cv2.cvtColor(plate, cv2.COLOR_BGR2HSV)
+        plate_color_mask = cv2.inRange(plate_hsv, hsv_filter['lower'], hsv_filter['upper'])
 
-    half_plate_width = max(int(plate_width / 2), 1)
-    half_plate_height = max(int(plate_height / 2), 1)
+        plate_color_match_ratio = cv2.countNonZero(plate_color_mask) / (plate_width * plate_height)
 
-    height, width, _ = plate_region.shape
+        if plate_color_match_ratio < min_plate_color_match_ratio:
 
-    plate_from_x = max(plate_center[0] - half_plate_width, 0)
-    plate_to_x = min(plate_center[0] + half_plate_width, width - 1)
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([0, 0, 255], dtype='uint8')
 
-    plate_from_y = max(plate_center[1] - half_plate_height, 0)
-    plate_to_y = min(plate_center[1] + half_plate_height, height - 1)
+            continue
 
-    plate_region_cropped = plate_region[plate_from_y:plate_to_y, plate_from_x:plate_to_x]
+        plates.append(plate)
 
-    return plate_region_cropped
+    if DEBUG:
+        cv2.imshow("debug mask", debug_mask)
+
+    return plates_color, plates
 
