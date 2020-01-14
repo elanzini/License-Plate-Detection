@@ -71,6 +71,7 @@ def get_time_to_compute(start_time, current_time):
 
     return '%.3f' % (current_time - start_time)
 
+
 def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
     cap = cv2.VideoCapture(file_path)
@@ -187,7 +188,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     for i, scene in enumerate(scenes_joined):
 
         plate = get_most_common_plate_in_scene(scene)
-        df.loc[i] = [plate] + [(scene['first_frame'] + scene['frame_counter']) // 2] + [plates_time_to_compute[plate]]
+        df.loc[i] = [plate] + [(scene['first_frame'] + scene['frame_counter'] // 2)] + [plates_time_to_compute[plate]]
 
     df.to_csv("out.csv", encoding="utf-8", index=False)
 
