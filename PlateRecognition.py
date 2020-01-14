@@ -183,7 +183,7 @@ def sharpen_image(plate):
     return sharpened_plate
 
 
-def get_connected_components_small_plates(plate, plate_color):
+def get_small_plates_edges(plate, plate_color):
 
     plate = sharpen_image(plate)
     plate = cv2.resize(plate, dsize=(plate.shape[1] * 3, plate.shape[0] * 3))
@@ -246,7 +246,7 @@ def recognize_plate(plate, plate_color, force_sharpening=False):
 
     if force_sharpening:
 
-        plate, edges = get_connected_components_small_plates(plate, plate_color)
+        plate, edges = get_small_plates_edges(plate, plate_color)
 
     else:
 
