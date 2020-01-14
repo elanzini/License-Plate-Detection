@@ -188,15 +188,17 @@ def get_connected_components_small_plates(plate, plate_color):
     plate = sharpen_image(plate)
     plate = cv2.resize(plate, dsize=(plate.shape[1] * 3, plate.shape[0] * 3))
 
-    cv2.imshow("sharpened image", plate)
+    if DEBUG:
+        cv2.imshow("sharpened image", plate)
 
     plate_gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
     letters_mask = cv2.inRange(plate_gray, 0, 90)
 
     edges = cv2.Canny(letters_mask, 100, 200)
 
-    cv2.imshow("letters mask", letters_mask)
-    cv2.imshow("edges", edges)
+    if DEBUG:
+        cv2.imshow("letters mask", letters_mask)
+        cv2.imshow("edges", edges)
 
     return plate, edges
 
