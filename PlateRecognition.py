@@ -36,7 +36,7 @@ letter_threshold_ratio = 0.5
 
 min_cc_area_ratio = 0.15
 
-small_plate_threshold = 2800
+small_plate_threshold = 3000
 
 
 def get_mask_centroid_x(mask):
