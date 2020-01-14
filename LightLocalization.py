@@ -3,13 +3,10 @@ import cv2
 
 DEBUG = False
 
-min_plate_width = 80
-min_plate_height = 20
+min_plate_width = 75
+min_plate_height = 18
 
 min_plate_area = min_plate_width * min_plate_height
-
-white_sensitivity = 60
-white_region_sensitivity = 100
 
 kernel_2x2 = np.ones((2, 2), dtype="uint8")
 
@@ -23,10 +20,6 @@ color_filters = {
     'yellow_red_image': {
         'lower': np.array([0, 120, 80], dtype='uint8'),
         'upper': np.array([15, 255, 255], dtype='uint8')
-    },
-    'white': {
-        'lower': np.array([0, 0, 180], dtype='uint8'),
-        'upper': np.array([255, 20, 255], dtype='uint8')
     }
 }
 
@@ -41,7 +34,20 @@ def apply_mask(image, mask):
     return cv2.bitwise_and(image, image, mask=mask)
 
 
-def locate_plates(image, plates_color='yellow'):
+def find_plates(image):
+
+    for color in color_filters:
+
+        plates_color, plates = locate_plates_by_color(image, color)
+
+        if len(plates) > 0:
+
+            return plates_color, plates
+
+    return "unknown", []
+
+
+def locate_plates_by_color(image, plates_color='yellow'):
 
     # Converting to HSV
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -61,8 +67,10 @@ def locate_plates(image, plates_color='yellow'):
 
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
 
-    if DEBUG and plates_color == 'white':
+    if DEBUG:
         cv2.imshow("color mask", apply_mask(image, color_mask))
+        debug_mask = np.zeros(image.shape, dtype='uint8')
+
 
     for label in range(1, num_labels):
 
@@ -73,12 +81,20 @@ def locate_plates(image, plates_color='yellow'):
 
         # Filtering by area
         if stats[label, cv2.CC_STAT_AREA] < min_plate_area:
+
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 0, 0], dtype='uint8')
+
             continue
 
         aspect_ratio = w / h
 
         # Filtering by connected component aspect ratio
         if aspect_ratio < min_cc_aspect_ratio:
+
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([0, 255, 0], dtype='uint8')
+
             continue
 
         plate_points = np.argwhere(labels == label)
@@ -106,9 +122,17 @@ def locate_plates(image, plates_color='yellow'):
         # Filtering by plate size
 
         if plate_width < min_plate_width:
+
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 255, 0], dtype='uint8')
+
             continue
 
         if plate_height < min_plate_height:
+
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([255, 0, 255], dtype='uint8')
+
             continue
 
         y, x = (
@@ -146,9 +170,16 @@ def locate_plates(image, plates_color='yellow'):
         plate_color_match_ratio = cv2.countNonZero(plate_color_mask) / (plate_width * plate_height)
 
         if plate_color_match_ratio < min_plate_color_match_ratio:
+
+            if DEBUG:
+                debug_mask[np.where(labels == label)] = np.array([0, 0, 255], dtype='uint8')
+
             continue
 
         plates.append(plate)
+
+    if DEBUG:
+        cv2.imshow("debug mask", debug_mask)
 
     return plates_color, plates
 

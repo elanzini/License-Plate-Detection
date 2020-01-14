@@ -22,6 +22,8 @@ Output: None
 THRESHOLD_SCENE = 0.9
 THRESHOLD_ECR = 0.3
 
+DEBUG = False
+
 
 def hamming_distance(s1, s2):
     return sum(c1 != c2 for c1, c2 in zip(s1, s2))
@@ -92,6 +94,9 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
     df = pd.DataFrame(columns=['License plate', 'Frame no.', 'Timestamp(seconds)'])
     start_time = time.time()
 
+    if DEBUG:
+        prev_plates_count = 0
+
     while cap.isOpened():
 
         previous_frame = frame
@@ -105,7 +110,7 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
 
         total_frames_counter += 1
 
-        plates_color, plates = LightLocalization.locate_plates(frame)
+        plates_color, plates = LightLocalization.find_plates(frame)
 
         cv2.imshow("frame", frame)
 
@@ -124,13 +129,25 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                 'frame_counter': scene['frame_counter'] + 1
             })
 
-        for plate in plates:
+        if DEBUG:
+
+            for i in range(len(plates)):
+                cv2.imshow("plate " + str(i), plates[i])
+
+            if len(plates) < prev_plates_count:
+                for i in range(len(plates), prev_plates_count + 1):
+                    cv2.destroyWindow("plate " + str(i))
+
+            prev_plates_count = len(plates)
+
+
+        for i, plate in enumerate(plates):
 
             recognized_plate = LightPlateRecognition.recognize_plate(plate, plates_color)
 
             if recognized_plate is None:
                 continue
-            elif (plates_color in ['yellow'] and not Validator.pattern_check_dutch_license(recognized_plate)):
+            elif (plates_color in ['yellow', 'yellow_red_image'] and not Validator.pattern_check_dutch_license(recognized_plate)):
                 continue
 
             if recognized_plate not in plates_time_to_compute:
@@ -149,6 +166,8 @@ def CaptureFrame_Process(file_path, sample_frequency, save_path):
                 scene['plates'].update({
                     recognized_plate: 1
                 })
+
+    scenes.append(scene)
 
     for scene in scenes:
         print(scene)

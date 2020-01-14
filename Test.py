@@ -3,8 +3,8 @@ import LightLocalization
 import LightPlateRecognition
 import time
 
-# filename = 'TrainingSet\Categorie IV\Video89_2.avi'
-filename = 'trainingsvideo.avi'
+filename = 'TrainingSet\Categorie III\Video57_2.avi'
+# filename = 'trainingsvideo.avi'
 
 cap = cv2.VideoCapture(filename)
 
@@ -67,6 +67,8 @@ while cap.isOpened():
                 recognized_plates.update({
                     plate: 1
                 })
+
+    time.sleep(.1)
 
 most_common_plate = "!"
 most_common_plate_occurrences = 0

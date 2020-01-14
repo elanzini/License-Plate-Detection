@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import math
 import time
+import Validator
 
 aspect_ratio_threshold = 3
 
@@ -34,6 +35,8 @@ histogram_bins = np.arange(0, 255, histogram_bins_width)
 letter_threshold_ratio = 0.5
 
 min_cc_area_ratio = 0.15
+
+small_plate_threshold = 2800
 
 
 def get_mask_centroid_x(mask):
@@ -73,6 +76,7 @@ def load_letter_templates():
         [cv2.imread('SameSizeNumbers/3.bmp'), '3'],
         [cv2.imread('SameSizeNumbers/4.bmp'), '4'],
         [cv2.imread('SameSizeNumbers/5.bmp'), '5'],
+        [cv2.imread('SameSizeNumbers/5temp.bmp'), '5'],
         [cv2.imread('SameSizeNumbers/6.bmp'), '6'],
         [cv2.imread('SameSizeNumbers/7.bmp'), '7'],
         [cv2.imread('SameSizeNumbers/8.bmp'), '8'],
@@ -171,17 +175,83 @@ def count_mismatches(
     return cv2.countNonZero(difference)
 
 
-def recognize_plate(plate, plate_color):
+def sharpen_image(plate):
+
+    plate_gaussian = cv2.GaussianBlur(plate, (5, 5), 2.0)
+    sharpened_plate = cv2.addWeighted(plate, 5, plate_gaussian, -4, 0, plate)
+
+    return sharpened_plate
+
+
+def get_connected_components_small_plates(plate, plate_color):
+
+    plate = sharpen_image(plate)
+    plate = cv2.resize(plate, dsize=(plate.shape[1] * 3, plate.shape[0] * 3))
+
+    cv2.imshow("sharpened image", plate)
+
+    plate_gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
+    letters_mask = cv2.inRange(plate_gray, 0, 90)
+
+    edges = cv2.Canny(letters_mask, 100, 200)
+
+    cv2.imshow("letters mask", letters_mask)
+    cv2.imshow("edges", edges)
+
+    return plate, edges
+
+
+small_plates_fixes = {
+    'S': '5',
+    '8': 'B',
+    'B': '8'
+}
+
+
+def fix_small_plates(recognized_plate):
+
+    def fix_mistake(plate_to_fix, from_letter, to_letter):
+
+        if from_letter in plate_to_fix:
+
+            s_positions = [pos for pos, char in enumerate(plate_to_fix) if char == from_letter]
+            for s_position in s_positions:
+
+                new_plate = plate_to_fix[:s_position] + to_letter + plate_to_fix[s_position + 1:]
+
+                if Validator.pattern_check_dutch_license(new_plate):
+                    return new_plate
+
+        return None
+
+    for fix in small_plates_fixes:
+
+        fixed_plate = fix_mistake(recognized_plate, fix, small_plates_fixes[fix])
+
+        if fixed_plate is not None:
+            return fixed_plate
+
+    return recognized_plate
+
+
+def recognize_plate(plate, plate_color, force_sharpening=False):
 
     plate = fix_perspective(plate)
 
+    is_small_plate = plate.size / 3 < small_plate_threshold
+
     # Detecting edges
 
-    edges = cv2.Canny(plate, 120, 200)
+    if force_sharpening:
 
-    # Closing edges
+        plate, edges = get_connected_components_small_plates(plate, plate_color)
 
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_2x2)
+    else:
+
+        edges = cv2.Canny(plate, 120, 200)
+
+        # Closing edges
+        edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_2x2)
 
     if DEBUG:
         cv2.imshow("edges", edges)
@@ -192,7 +262,11 @@ def recognize_plate(plate, plate_color):
     letters = []
 
     if num_labels < expected_letters + 1:
-        return None
+
+        if is_small_plate and not force_sharpening:
+            return recognize_plate(plate, plate_color, True)
+        else:
+            return None
 
     height, width, _ = plate.shape
 
@@ -242,7 +316,10 @@ def recognize_plate(plate, plate_color):
         })
 
     if len(letters) < expected_letters:
-        return None
+        if is_small_plate and not force_sharpening:
+            return recognize_plate(plate, plate_color, True)
+        else:
+            return None
 
     licence_plate_letters = []
 
@@ -321,7 +398,15 @@ def recognize_plate(plate, plate_color):
             else:
                 licence_plate.insert(6, '-')
 
-    return ''.join(licence_plate)
+    recognized_plate = ''.join(licence_plate)
+
+    if force_sharpening and not Validator.pattern_check_dutch_license(recognized_plate):
+
+        # Plate was sharpened, but is not valid
+
+        recognized_plate = fix_small_plates(recognized_plate)
+
+    return recognized_plate
 
 
 def recognize_letter(letter_mask, letter_mask_centroid_x):
@@ -368,55 +453,7 @@ def recognize_letter(letter_mask, letter_mask_centroid_x):
             min_mismatches_letter = letter_template['letter']
             error_ratio = min_mismatches / comparison_size
 
-    """
-    if min_mismatches_letter == '8':
-        min_mismatches_letter = verify_8_letter(letter_mask)
-    elif min_mismatches_letter == 'Z':
-        min_mismatches_letter = verify_z_letter(letter_mask)
-    # elif min_mismatches_letter == '5' or min_mismatches_letter == 'S':
-    #     min_mismatches_letter = verify_5_S_letter(letter_mask)
-    """
-
     return min_mismatches_letter, error_ratio
-
-
-verify_8_critical_region_threshold = 0.6
-
-
-def verify_8_letter(letter_mask):
-    letter_mask_height = letter_mask.shape[0]
-
-    critical_region_height = int(letter_mask_height / 6)
-    critical_region_y = int((letter_mask_height / 2) - (critical_region_height / 2))
-
-    critical_region_width = int(letter_mask.shape[1] / 3)
-
-    critical_region = letter_mask[critical_region_y:critical_region_y + critical_region_height, 0:critical_region_width]
-
-    critical_region_size = critical_region_width * critical_region_height
-
-    if cv2.countNonZero(critical_region) / critical_region_size > verify_8_critical_region_threshold:
-        return 'B'
-    else:
-        return '8'
-
-
-verify_z_critical_region_threshold = 0.38
-
-
-def verify_z_letter(letter_mask):
-    letter_mask_height = letter_mask.shape[0]
-
-    critical_region_height = int(letter_mask_height / 6)
-
-    critical_region = letter_mask[0:critical_region_height, ]
-
-    critical_region_size = letter_mask.shape[0] * critical_region_height
-
-    if cv2.countNonZero(critical_region) / critical_region_size > verify_z_critical_region_threshold:
-        return 'Z'
-    else:
-        return '2'
 
 
 expected_aspect_ratio = 300 / 66
@@ -443,22 +480,3 @@ def fix_perspective(licence_plate):
 
     return licence_plate
 
-
-verify_5_S_letter_threshold = 0.5
-
-
-def verify_5_S_letter(letter_mask):
-    critical_region_height = int(letter_mask.shape[0] / 2)
-    critical_region_width = int(letter_mask.shape[1] / 3.375)
-
-    critical_region_size = critical_region_height * critical_region_width
-
-    critical_region = letter_mask[:critical_region_height, :critical_region_width]
-
-    if cv2.countNonZero(critical_region) / critical_region_size > verify_5_S_letter_threshold:
-
-        return '5'
-
-    else:
-
-        return 'S'

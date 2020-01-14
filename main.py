@@ -2,6 +2,8 @@ import argparse
 import os
 import CaptureFrame_Process
 
+# python evaluation.py --file_path out.csv --ground_truth_path groundTruth.csv
+
 DEBUG = False
 
 # define the required arguments: video path(file_path), sample frequency(second), saving path for final result table
@@ -9,6 +11,7 @@ DEBUG = False
 def get_args():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--file_path', type=str, default='trainingsvideo.avi')
+	# parser.add_argument('--file_path', type=str, default='TrainingSet\Categorie III\Video100_2.avi')
 	parser.add_argument('--output_path', type=str, default=None)
 	parser.add_argument('--sample_frequency', type=int, default=2)
 	args = parser.parse_args()
